@@ -18,6 +18,7 @@
 #include <linux/stat.h>
 #include <linux/sched.h>
 #include <linux/capability.h>
+#include <linux/kthread.h>
 
 #define KERNEL_ATTR_RO(_name) \
 static struct kobj_attribute _name##_attr = __ATTR_RO(_name)
@@ -141,6 +142,74 @@ static ssize_t fscaps_show(struct kobject *kobj,
 }
 KERNEL_ATTR_RO(fscaps);
 
+static struct task_struct *kcrash = NULL;
+
+static int kthread_crash(void *data)
+{
+	bool disable_bh = !((bool)data);
+
+	while (!kthread_should_stop()) {
+	        set_current_state(TASK_INTERRUPTIBLE);
+		schedule();
+	}
+	__set_current_state(TASK_RUNNING);
+
+	if (disable_bh)
+		local_bh_disable();
+
+	do_exit(0);
+
+	if (disable_bh)
+		local_bh_enable();
+
+	return 0;
+}
+
+static ssize_t thread_crash_show(struct kobject *kobj,
+				       struct kobj_attribute *attr, char *buf)
+{
+	if (kcrash)
+		return sprintf(buf, "kcrash pid=%d\n", kcrash->pid);
+	return sprintf(buf, "kcrash thread is not started\n");
+}
+static ssize_t thread_crash_store(struct kobject *kobj,
+				   struct kobj_attribute *attr,
+				   const char *buf, size_t count)
+{
+	int ret = 0;
+	bool enable_bh = true;
+	bool create_kt = false;
+
+	if (!strncmp(buf, "disable-bh", count - 1)) {
+		enable_bh = false;
+		create_kt = true;
+	} else if (!strncmp(buf, "enable-bh", count - 1)) {
+		enable_bh = true;
+		create_kt = true;
+	}
+
+	if (create_kt) {
+		if (kcrash)
+			return -EBUSY;
+		kcrash = kthread_create(kthread_crash, (void*)enable_bh,
+			"kcrash-bh-%d", enable_bh);
+		if (IS_ERR(kcrash))
+			return PTR_ERR(kcrash);
+		wake_up_process(kcrash);
+	} else if (!strncmp(buf, "crash", count - 1)) {
+		struct task_struct *__kcrash = kcrash;
+		if (!kcrash)
+			return -EINVAL;
+		kcrash = NULL;
+		ret = kthread_stop(__kcrash);
+	} else {
+		return -EINVAL;
+	}
+
+	return ret < 0 ? ret : count;
+}
+KERNEL_ATTR_RW(thread_crash);
+
 /*
  * Make /sys/kernel/notes give the raw contents of our kernel .notes section.
  */
@@ -182,6 +251,7 @@ static struct attribute * kernel_attrs[] = {
 	&kexec_crash_size_attr.attr,
 	&vmcoreinfo_attr.attr,
 #endif
+	&thread_crash_attr.attr,
 	NULL
 };
 
