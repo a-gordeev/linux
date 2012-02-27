@@ -82,11 +82,15 @@
  * Are we in a softirq context? Interrupt context?
  * in_softirq - Are we currently processing softirq or have bh disabled?
  * in_serving_softirq - Are we currently processing softirq?
+ * in_serving_interrupt - Are we currently processing softirq, nmi or
+ *                        hardware interrupt?
  */
 #define in_irq()		(hardirq_count())
 #define in_softirq()		(softirq_count())
 #define in_interrupt()		(irq_count())
 #define in_serving_softirq()	(softirq_count() & SOFTIRQ_OFFSET)
+#define in_serving_interrupt()  (preempt_count() & (HARDIRQ_MASK \
+					| SOFTIRQ_OFFSET | NMI_MASK))
 
 /*
  * Are we in NMI context?
