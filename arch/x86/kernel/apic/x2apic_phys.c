@@ -108,6 +108,13 @@ x2apic_cpu_mask_to_apicid_and(const struct cpumask *cpumask,
 	return per_cpu(x86_cpu_to_apicid, cpu);
 }
 
+static void
+x2apic_phys_vector_allocation_domain(int cpu, struct cpumask *retmask)
+{       
+	cpumask_clear(retmask);         
+	cpumask_set_cpu(cpu, retmask);
+}       
+
 static void init_x2apic_ldr(void)
 {
 }
@@ -137,7 +144,7 @@ static struct apic apic_x2apic_phys = {
 	.check_apicid_used		= NULL,
 	.check_apicid_present		= NULL,
 
-	.vector_allocation_domain	= x2apic_vector_allocation_domain,
+	.vector_allocation_domain	= x2apic_phys_vector_allocation_domain,
 	.init_apic_ldr			= init_x2apic_ldr,
 
 	.ioapic_phys_id_map		= NULL,

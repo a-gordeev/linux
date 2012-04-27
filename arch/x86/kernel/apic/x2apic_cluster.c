@@ -96,36 +96,129 @@ static void x2apic_send_IPI_all(int vector)
 	__x2apic_send_IPI_mask(cpu_online_mask, vector, APIC_DEST_ALLINC);
 }
 
+static inline unsigned int 
+__x2apic_cluster_to_apicid(int cpu_in_cluster, const struct cpumask *cpumask)
+{
+	unsigned int apicid = 0;
+	int cpu;
+
+	for_each_cpu_and(cpu, per_cpu(cpus_in_cluster, cpu_in_cluster), cpumask)
+		apicid |= per_cpu(x86_cpu_to_logical_apicid, cpu);
+
+	return apicid;
+}
+
+static int
+__x2apic_cpu_mask_to_apicid(const struct cpumask *cpumask, unsigned int *apicid)
+{
+	int ret;
+	int cpu, heaviest;
+	unsigned int weight, max_weight;
+	cpumask_var_t target_cpus, cluster_cpus;
+
+	ret = -ENOMEM;
+	if (unlikely(!alloc_cpumask_var(&target_cpus, GFP_ATOMIC)))
+		goto out;
+	if (unlikely(!alloc_cpumask_var(&cluster_cpus, GFP_ATOMIC)))
+		goto out_free_target_cpus;
+
+	cpumask_and(target_cpus, cpumask, cpu_online_mask);
+	max_weight = 0;
+
+	while (!cpumask_empty(target_cpus)) {
+		cpu = cpumask_first(target_cpus);
+		cpumask_and(cluster_cpus, per_cpu(cpus_in_cluster, cpu), cpumask);
+
+		weight = cpumask_weight(cluster_cpus);
+		if (weight > max_weight) {
+			max_weight = weight;
+			heaviest = cpu;
+		}
+
+		cpumask_andnot(target_cpus, target_cpus, cluster_cpus);
+	}
+
+	ret = -EINVAL;
+	if (!max_weight)
+		goto out_free_cluster_cpus;
+
+	ret = 0;
+	*apicid = __x2apic_cluster_to_apicid(heaviest, cpumask);
+
+out_free_cluster_cpus:
+	free_cpumask_var(cluster_cpus);
+out_free_target_cpus:
+	free_cpumask_var(target_cpus);
+out:
+	return ret;
+}
+
 static unsigned int x2apic_cpu_mask_to_apicid(const struct cpumask *cpumask)
 {
-	/*
-	 * We're using fixed IRQ delivery, can only return one logical APIC ID.
-	 * May as well be the first.
-	 */
-	int cpu = cpumask_first(cpumask);
+	int ret;
+	int cpu;
+	unsigned int apicid;
 
-	if ((unsigned)cpu < nr_cpu_ids)
-		return per_cpu(x86_cpu_to_logical_apicid, cpu);
-	else
-		return BAD_APICID;
+	ret = __x2apic_cpu_mask_to_apicid(cpumask, &apicid);
+
+	if (!ret)
+		return apicid;
+
+	if (ret == -ENOMEM) {
+		for_each_cpu(cpu, cpumask) {
+			if (cpumask_test_cpu(cpu, cpu_online_mask))
+				break;
+	        }
+		if (cpu < nr_cpu_ids)
+			return __x2apic_cluster_to_apicid(cpu, cpumask);
+	}
+
+	return BAD_APICID;
 }
 
 static unsigned int
 x2apic_cpu_mask_to_apicid_and(const struct cpumask *cpumask,
 			      const struct cpumask *andmask)
 {
-	int cpu;
+	int ret;
+	int cpu, first_cpu;
+	unsigned int apicid;
+	cpumask_var_t target_cpus;
 
-	/*
-	 * We're using fixed IRQ delivery, can only return one logical APIC ID.
-	 * May as well be the first.
-	 */
-	for_each_cpu_and(cpu, cpumask, andmask) {
-		if (cpumask_test_cpu(cpu, cpu_online_mask))
-			break;
+	if (likely(alloc_cpumask_var(&target_cpus, GFP_ATOMIC))) {
+		cpumask_and(target_cpus, cpumask, andmask);
+
+		ret = __x2apic_cpu_mask_to_apicid(target_cpus, &apicid);
+
+		free_cpumask_var(target_cpus);
+
+		if (!ret)
+			return apicid;
 	}
 
-	return per_cpu(x86_cpu_to_logical_apicid, cpu);
+	first_cpu = nr_cpu_ids;
+	for_each_cpu_and(cpu, cpumask, andmask) {
+		if (cpumask_test_cpu(cpu, cpu_online_mask)) {
+			first_cpu = cpu;
+			break;
+		}
+	}
+	WARN_ON(!(first_cpu < nr_cpu_ids));
+
+	apicid = 0;
+	for_each_cpu_and(cpu, per_cpu(cpus_in_cluster, first_cpu), cpumask) {
+		if (!cpumask_test_cpu(cpu, andmask))
+			continue;
+		apicid |= per_cpu(x86_cpu_to_logical_apicid, cpu);
+	}
+
+	return apicid;
+}
+
+static void
+x2apic_cluster_vector_allocation_domain(int cpu, struct cpumask *retmask)
+{
+	cpumask_copy(retmask, cpu_possible_mask);
 }
 
 static void init_x2apic_ldr(void)
@@ -225,7 +318,7 @@ static struct apic apic_x2apic_cluster = {
 	.check_apicid_used		= NULL,
 	.check_apicid_present		= NULL,
 
-	.vector_allocation_domain	= x2apic_vector_allocation_domain,
+	.vector_allocation_domain	= x2apic_cluster_vector_allocation_domain,
 	.init_apic_ldr			= init_x2apic_ldr,
 
 	.ioapic_phys_id_map		= NULL,
