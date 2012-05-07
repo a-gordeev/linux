@@ -1618,6 +1618,166 @@ static void __init setup_timer_IRQ0_pin(unsigned int ioapic_idx,
 	ioapic_write_entry(ioapic_idx, pin, entry);
 }
 
+int sprintf_IO_APIC(char *p, int ioapic_idx)
+{
+	int i;
+	union IO_APIC_reg_00 reg_00;
+	union IO_APIC_reg_01 reg_01;
+	union IO_APIC_reg_02 reg_02;
+	union IO_APIC_reg_03 reg_03;
+	unsigned long flags;
+	char *buf = p;
+
+	raw_spin_lock_irqsave(&ioapic_lock, flags);
+	reg_00.raw = io_apic_read(ioapic_idx, 0);
+	reg_01.raw = io_apic_read(ioapic_idx, 1);
+	if (reg_01.bits.version >= 0x10)
+		reg_02.raw = io_apic_read(ioapic_idx, 2);
+	if (reg_01.bits.version >= 0x20)
+		reg_03.raw = io_apic_read(ioapic_idx, 3);
+	raw_spin_unlock_irqrestore(&ioapic_lock, flags);
+
+	p += sprintf(p, "IO APIC #%d......\n", mpc_ioapic_id(ioapic_idx));
+	p += sprintf(p, ".... register #00: %08X\n", reg_00.raw);
+	p += sprintf(p, ".......    : physical APIC id: %02X\n", reg_00.bits.ID);
+	p += sprintf(p, ".......    : Delivery Type: %X\n", reg_00.bits.delivery_type);
+	p += sprintf(p, ".......    : LTS          : %X\n", reg_00.bits.LTS);
+
+	p += sprintf(p, ".... register #01: %08X\n", *(int *)&reg_01);
+	p += sprintf(p, ".......     : max redirection entries: %02X\n",
+		reg_01.bits.entries);
+
+	p += sprintf(p, ".......     : PRQ implemented: %X\n", reg_01.bits.PRQ);
+	p += sprintf(p, ".......     : IO APIC version: %02X\n",
+		reg_01.bits.version);
+
+	/*
+	 * Some Intel chipsets with IO APIC VERSION of 0x1? don't have reg_02,
+	 * but the value of reg_02 is read as the previous read register
+	 * value, so ignore it if reg_02 == reg_01.
+	 */
+	if (reg_01.bits.version >= 0x10 && reg_02.raw != reg_01.raw) {
+		p += sprintf(p, ".... register #02: %08X\n", reg_02.raw);
+		p += sprintf(p, ".......     : arbitration: %02X\n", reg_02.bits.arbitration);
+	}
+
+	/*
+	 * Some Intel chipsets with IO APIC VERSION of 0x2? don't have reg_02
+	 * or reg_03, but the value of reg_0[23] is read as the previous read
+	 * register value, so ignore it if reg_03 == reg_0[12].
+	 */
+	if (reg_01.bits.version >= 0x20 && reg_03.raw != reg_02.raw &&
+	    reg_03.raw != reg_01.raw) {
+		p += sprintf(p, ".... register #03: %08X\n", reg_03.raw);
+		p += sprintf(p, ".......     : Boot DT    : %X\n", reg_03.bits.boot_DT);
+	}
+
+	p += sprintf(p, ".... IRQ redirection table:\n");
+
+	if (intr_remapping_enabled) {
+		p += sprintf(p, " NR Indx Fmt Mask Trig IRR"
+			" Pol Stat Indx2 Zero Vect:\n");
+	} else {
+		p += sprintf(p, " NR Dst Mask Trig IRR Pol"
+			" Stat Dmod Deli Vect:\n");
+	}
+
+	for (i = 0; i <= reg_01.bits.entries; i++) {
+		if (intr_remapping_enabled) {
+			struct IO_APIC_route_entry entry;
+			struct IR_IO_APIC_route_entry *ir_entry;
+
+			entry = ioapic_read_entry(ioapic_idx, i);
+			ir_entry = (struct IR_IO_APIC_route_entry *) &entry;
+			p += sprintf(p, " %02x %04X ",
+				i,
+				ir_entry->index
+			);
+			p += sprintf(p, "%1d   %1d    %1d    %1d   %1d   "
+				"%1d    %1d     %X    %02X\n",
+				ir_entry->format,
+				ir_entry->mask,
+				ir_entry->trigger,
+				ir_entry->irr,
+				ir_entry->polarity,
+				ir_entry->delivery_status,
+				ir_entry->index2,
+				ir_entry->zero,
+				ir_entry->vector
+			);
+		} else {
+			struct IO_APIC_route_entry entry;
+
+			entry = ioapic_read_entry(ioapic_idx, i);
+			p += sprintf(p, " %02x %02X  ",
+				i,
+				entry.dest
+			);
+			p += sprintf(p, "%1d    %1d    %1d   %1d   %1d    "
+				"%1d    %1d    %02X\n",
+				entry.mask,
+				entry.trigger,
+				entry.irr,
+				entry.polarity,
+				entry.delivery_status,
+				entry.dest_mode,
+				entry.delivery_mode,
+				entry.vector
+			);
+		}
+	}
+
+	return p - buf;
+}
+
+int sprintf_IO_APICs(char *p)
+{
+	int ioapic_idx;
+	struct irq_cfg *cfg;
+	unsigned int irq;
+	struct irq_chip *chip;
+	char *buf = p;
+
+	p += sprintf(p, "number of MP IRQ sources: %d.\n", mp_irq_entries);
+	for (ioapic_idx = 0; ioapic_idx < nr_ioapics; ioapic_idx++)
+		p += sprintf(p, "number of IO-APIC #%d registers: %d.\n",
+		       mpc_ioapic_id(ioapic_idx),
+		       ioapics[ioapic_idx].nr_registers);
+
+	/*
+	 * We are a bit conservative about what we expect.  We have to
+	 * know about every hardware change ASAP.
+	 */
+	p += sprintf(p, "testing the IO APIC.......................\n");
+
+	for (ioapic_idx = 0; ioapic_idx < nr_ioapics; ioapic_idx++)
+		p += sprintf_IO_APIC(p, ioapic_idx);
+
+	p += sprintf(p, "IRQ to pin mappings:\n");
+	for_each_active_irq(irq) {
+		struct irq_pin_list *entry;
+
+		chip = irq_get_chip(irq);
+		if (chip != &ioapic_chip)
+			continue;
+
+		cfg = irq_get_chip_data(irq);
+		if (!cfg)
+			continue;
+		entry = cfg->irq_2_pin;
+		if (!entry)
+			continue;
+		p += sprintf(p, "IRQ%d ", irq);
+		for_each_irq_pin(entry, cfg->irq_2_pin)
+			p += sprintf(p, "-> %d:%d", entry->apic, entry->pin);
+		p += sprintf(p, "\n");
+	}
+
+	p += sprintf(p, ".................................... done.\n");
+
+	return p - buf;
+}
+
 __apicdebuginit(void) print_IO_APIC(int ioapic_idx)
 {
 	int i;

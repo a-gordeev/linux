@@ -141,6 +141,34 @@ static ssize_t fscaps_show(struct kobject *kobj,
 }
 KERNEL_ATTR_RO(fscaps);
 
+#ifdef CONFIG_X86_IO_APIC
+
+extern int sprintf_IO_APICs(char *p);
+
+static ssize_t ioapic_show(struct kobject *kobj,
+				       struct kobj_attribute *attr, char *buf)
+{
+	return sprintf_IO_APICs(buf);
+}
+static ssize_t ioapic_store(struct kobject *kobj,
+				   struct kobj_attribute *attr,
+				   const char *buf, size_t count)
+{
+	return -EINVAL;
+/*
+	unsigned long cnt;
+	int ret;
+
+	if (strict_strtoul(buf, 0, &cnt))
+		return -EINVAL;
+
+	ret = crash_shrink_memory(cnt);
+	return ret < 0 ? ret : count;
+*/
+}
+KERNEL_ATTR_RW(ioapic);
+#endif
+
 /*
  * Make /sys/kernel/notes give the raw contents of our kernel .notes section.
  */
@@ -181,6 +209,9 @@ static struct attribute * kernel_attrs[] = {
 	&kexec_crash_loaded_attr.attr,
 	&kexec_crash_size_attr.attr,
 	&vmcoreinfo_attr.attr,
+#endif
+#ifdef CONFIG_X86_IO_APIC
+	&ioapic_attr.attr,
 #endif
 	NULL
 };
