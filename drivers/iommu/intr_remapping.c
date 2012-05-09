@@ -832,3 +832,29 @@ error:
 	return -1;
 }
 
+int sprintf_IRTE(char *p, int irq, const struct irte *irte)
+{
+	char *buf = p;
+
+	p += sprintf(p, "%4d: %1d   %1d  %1d  %1d  %1d %03X %03X %04X.%04X %04X  %1d   %1d\n", irq, irte->present, irte->fpd, irte->dst_mode, irte->redir_hint, irte->trigger_mode, irte->dlvry_mode, irte->vector, (irte->dest_id >> 16) & 0xFFFF, irte->dest_id & 0xFFFF, irte->sid, irte->sq, irte->svt);
+
+	return p - buf;
+}
+
+int sprintf_IRTEs(char *p)
+{
+	int irq;
+	struct irte irte;
+	char *buf = p;
+
+	p += sprintf(p, "IRQ#: P FPD DM RH TM DLM VEC --Dest-ID -SID SQ SVT\n");
+
+	for_each_active_irq(irq) {
+		if (get_irte(irq, &irte))
+			continue;
+		p += sprintf_IRTE(p, irq, &irte);
+	}
+
+	return p - buf;
+}
+
