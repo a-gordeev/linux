@@ -68,7 +68,7 @@ int get_irte(int irq, struct irte *entry)
 	unsigned long flags;
 	int index;
 
-	if (!entry || !irq_iommu)
+	if (!entry || !irq_iommu || !irq_iommu->iommu)
 		return -1;
 
 	raw_spin_lock_irqsave(&irq_2_ir_lock, flags);
