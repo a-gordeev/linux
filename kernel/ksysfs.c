@@ -18,6 +18,7 @@
 #include <linux/stat.h>
 #include <linux/sched.h>
 #include <linux/capability.h>
+#include <linux/gfp.h>
 
 #define KERNEL_ATTR_RO(_name) \
 static struct kobj_attribute _name##_attr = __ATTR_RO(_name)
@@ -175,6 +176,61 @@ static ssize_t intremap_store(struct kobject *kobj,
 KERNEL_ATTR_RW(intremap);
 #endif
 
+#ifdef CONFIG_X86_LOCAL_APIC
+static ssize_t __apicid_and_store(struct kobject *kobj,
+				  struct kobj_attribute *attr,
+				  const char *buf, size_t count,
+				  bool and)
+{
+	int ret;
+	cpumask_var_t cpumask;
+
+	if (!alloc_cpumask_var(&cpumask, GFP_KERNEL))
+		return -ENOMEM;
+
+	ret = bitmap_parse(buf, count, cpumask_bits(cpumask), nr_cpumask_bits);
+	if (ret)
+		goto free_cpumask;
+
+	if (and)
+		apic->cpu_mask_to_apicid_and(cpumask, cpu_online_mask);
+	else
+		apic->cpu_mask_to_apicid(cpumask);
+
+free_cpumask:
+	free_cpumask_var(cpumask);
+	return ret;
+}
+
+static ssize_t apicid_and_show(struct kobject *kobj,
+			       struct kobj_attribute *attr, char *buf)
+{
+	return 0;
+}
+static ssize_t apicid_and_store(struct kobject *kobj,
+				struct kobj_attribute *attr,
+				const char *buf, size_t count)
+{
+	int ret = __apicid_and_store(kobj, attr, buf, count, true);
+	return ret < 0 ? ret : count;
+}
+KERNEL_ATTR_RW(apicid_and);
+
+static ssize_t apicid_show(struct kobject *kobj,
+			       struct kobj_attribute *attr, char *buf)
+{
+	return 0;
+}
+static ssize_t apicid_store(struct kobject *kobj,
+				struct kobj_attribute *attr,
+				const char *buf, size_t count)
+{
+	int ret = __apicid_and_store(kobj, attr, buf, count, false);
+	return ret < 0 ? ret : count;
+}
+KERNEL_ATTR_RW(apicid);
+#endif
+
 /*
  * Make /sys/kernel/notes give the raw contents of our kernel .notes section.
  */
@@ -221,6 +277,10 @@ static struct attribute * kernel_attrs[] = {
 #endif
 #ifdef CONFIG_IRQ_REMAP
 	&intremap_attr.attr,
+#endif
+#ifdef CONFIG_X86_LOCAL_APIC
+	&apicid_and_attr.attr,
+	&apicid_attr.attr,
 #endif
 	NULL
 };
