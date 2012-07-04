@@ -68,7 +68,7 @@ static int alloc_irte(struct intel_iommu *iommu, int irq, u16 count)
 {
 	struct ir_table *table = iommu->ir_table;
 	struct irq_2_iommu *irq_iommu = irq_2_iommu(irq);
-	u16 index, start_index;
+	u16 index;
 	unsigned int mask = 0;
 	unsigned long flags;
 	int i;
@@ -79,7 +79,7 @@ static int alloc_irte(struct intel_iommu *iommu, int irq, u16 count)
 	/*
 	 * start the IRTE search from index 0.
 	 */
-	index = start_index = 0;
+	index = 0;
 
 	if (count > 1) {
 		count = __roundup_pow_of_two(count);
@@ -103,9 +103,9 @@ static int alloc_irte(struct intel_iommu *iommu, int irq, u16 count)
 		if (i == index + count)
 			break;
 
-		index = (index + count) % INTR_REMAP_TABLE_ENTRIES;
+		index = index + count;
 
-		if (index == start_index) {
+		if (index + count > INTR_REMAP_TABLE_ENTRIES) {
 			raw_spin_unlock_irqrestore(&irq_2_ir_lock, flags);
 			printk(KERN_ERR "can't allocate an IRTE\n");
 			return -1;
