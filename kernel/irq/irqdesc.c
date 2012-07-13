@@ -210,6 +210,13 @@ static int irq_expand_nr_irqs(unsigned int nr)
 	return 0;
 }
 
+static int irq_can_expand_nr_irqs(unsigned int nr)
+{
+	if (nr > IRQ_BITMAP_BITS)
+		return -ENOMEM;
+	return 0;
+}
+
 int __init early_irq_init(void)
 {
 	int i, initcnt, node = first_online_node;
@@ -410,6 +417,30 @@ int irq_reserve_irqs(unsigned int from, unsigned int cnt)
 	else
 		ret = -EEXIST;
 	mutex_unlock(&sparse_irq_lock);
+	return ret;
+}
+
+/**
+ * irq_can_alloc_irqs - checks if a range of irqs could be allocated
+ * @from:	check from irq number
+ * @cnt:	number of irqs to check
+ *
+ * Returns 0 on success or an appropriate error code
+ */
+int irq_can_alloc_irqs(unsigned int from, unsigned int cnt)
+{
+	unsigned int start;
+	int ret = 0;
+
+	if (!cnt)
+		return -EINVAL;
+
+	mutex_lock(&sparse_irq_lock);
+	start = bitmap_find_next_zero_area(allocated_irqs, IRQ_BITMAP_BITS,
+					   from, cnt, 0);
+	mutex_unlock(&sparse_irq_lock);
+	if (start + cnt > nr_irqs)
+		ret = irq_can_expand_nr_irqs(start + cnt);
 	return ret;
 }
 

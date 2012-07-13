@@ -305,6 +305,11 @@ static int alloc_irq_from(unsigned int from, int node)
 	return irq_alloc_desc_from(from, node);
 }
 
+static int alloc_irqs_from(unsigned int from, unsigned int count, int node)
+{
+	return irq_alloc_descs_from(from, count, node);
+}
+
 static void free_irq_at(unsigned int at, struct irq_cfg *cfg)
 {
 	free_irq_cfg(at, cfg);
@@ -3030,6 +3035,55 @@ int create_irq(void)
 	return irq;
 }
 
+unsigned int create_irqs(unsigned int from, unsigned int count, int node)
+{
+	struct irq_cfg **cfg;
+	unsigned long flags;
+	int irq, i;
+
+	if (from < nr_irqs_gsi)
+		from = nr_irqs_gsi;
+
+	cfg = kzalloc_node(count * sizeof(cfg[0]), GFP_KERNEL, node);
+	if (!cfg)
+		return 0;
+
+	irq = alloc_irqs_from(from, count, node);
+	if (irq < 0)
+		goto out_cfgs;
+
+	for (i = 0; i < count; i++) {
+		cfg[i] = alloc_irq_cfg(irq + i, node);
+		if (!cfg[i])
+			goto out_irqs;
+	}
+
+	raw_spin_lock_irqsave(&vector_lock, flags);
+	for (i = 0; i < count; i++)
+		if (__assign_irq_vector(irq + i, cfg[i], apic->target_cpus()))
+			goto out_vecs;
+	raw_spin_unlock_irqrestore(&vector_lock, flags);
+
+	for (i = 0; i < count; i++) {
+		irq_set_chip_data(irq + i, cfg[i]);
+		irq_clear_status_flags(irq + i, IRQ_NOREQUEST);
+	}
+
+	kfree(cfg);
+	return irq;
+
+out_vecs:
+	for (; i; i--)
+		__clear_irq_vector(irq + i - 1, cfg[i - 1]);
+	raw_spin_unlock_irqrestore(&vector_lock, flags);
+out_irqs:
+	for (i = 0; i < count; i++)
+		free_irq_at(irq + i, cfg[i]);
+out_cfgs:
+	kfree(cfg);
+	return 0;
+}
+
 void destroy_irq(unsigned int irq)
 {
 	struct irq_cfg *cfg = irq_get_chip_data(irq);
@@ -3043,6 +3097,27 @@ void destroy_irq(unsigned int irq)
 	__clear_irq_vector(irq, cfg);
 	raw_spin_unlock_irqrestore(&vector_lock, flags);
 	free_irq_at(irq, cfg);
+}
+
+static inline void destroy_irqs(unsigned int irq, unsigned int count)
+{
+	unsigned int i;
+	for (i = 0; i < count; i++)
+		destroy_irq(irq + i);
+}
+
+static inline int
+can_create_pow_of_two_irqs(unsigned int from, unsigned int count)
+{
+	if ((count > 1) && (count % 2))
+		return -EINVAL;
+
+	for (; count; count = count / 2) {
+		if (!irq_can_alloc_irqs(from, count))
+			return count;
+	}
+
+	return -ENOSPC;
 }
 
 /*
@@ -3136,18 +3211,25 @@ static struct irq_chip msi_chip = {
 	.irq_retrigger		= ioapic_retrigger_irq,
 };
 
-static int setup_msi_irq(struct pci_dev *dev, struct msi_desc *msidesc, int irq)
+static int setup_msi_irq(struct pci_dev *dev, struct msi_desc *msidesc,
+			 unsigned int irq_base, unsigned int irq_offset)
 {
 	struct irq_chip *chip = &msi_chip;
 	struct msi_msg msg;
+	unsigned int irq = irq_base + irq_offset;
 	int ret;
 
 	ret = msi_compose_msg(dev, irq, &msg, -1);
 	if (ret < 0)
 		return ret;
 
-	irq_set_msi_desc(irq, msidesc);
-	write_msi_msg(irq, &msg);
+	irq_set_msi_desc_off(irq_base, irq_offset, msidesc);
+
+	/* MSI-X message is written per-IRQ, the offset is always 0.
+	 * MSI message denotes a contiguous group of IRQs, written for 0th IRQ.
+	 */
+	if (!irq_offset)
+		write_msi_msg(irq, &msg);
 
 	if (irq_remapped(irq_get_chip_data(irq))) {
 		irq_set_status_flags(irq, IRQ_MOVE_PCNTXT);
@@ -3161,15 +3243,11 @@ static int setup_msi_irq(struct pci_dev *dev, struct msi_desc *msidesc, int irq)
 	return 0;
 }
 
-int native_setup_msi_irqs(struct pci_dev *dev, int nvec, int type)
+int setup_msix_irqs(struct pci_dev *dev, int nvec)
 {
 	int node, ret, sub_handle, index = 0;
 	unsigned int irq, irq_want;
 	struct msi_desc *msidesc;
-
-	/* x86 doesn't support multiple MSI yet */
-	if (type == PCI_CAP_ID_MSI && nvec > 1)
-		return 1;
 
 	node = dev_to_node(&dev->dev);
 	irq_want = nr_irqs_gsi;
@@ -3199,7 +3277,7 @@ int native_setup_msi_irqs(struct pci_dev *dev, int nvec, int type)
 				goto error;
 		}
 no_ir:
-		ret = setup_msi_irq(dev, msidesc, irq);
+		ret = setup_msi_irq(dev, msidesc, irq, 0);
 		if (ret < 0)
 			goto error;
 		sub_handle++;
@@ -3209,6 +3287,76 @@ no_ir:
 error:
 	destroy_irq(irq);
 	return ret;
+}
+
+int setup_msi_irqs(struct pci_dev *dev, int nvec)
+{
+	int node, ret, sub_handle, index = 0;
+	unsigned int irq;
+	struct msi_desc *msidesc;
+
+	if (nvec > 1 && !irq_remapping_enabled)
+		return 1;
+
+	nvec = __roundup_pow_of_two(nvec);
+	ret = can_create_pow_of_two_irqs(nr_irqs_gsi, nvec);
+	if (ret != nvec)
+		return ret;
+
+	WARN_ON(!list_is_singular(&dev->msi_list));
+	msidesc = list_entry(dev->msi_list.next, struct msi_desc, list);
+	WARN_ON(msidesc->irq);
+	WARN_ON(msidesc->msi_attrib.multiple);
+
+	node = dev_to_node(&dev->dev);
+	irq = create_irqs(nr_irqs_gsi, nvec, node);
+	if (irq == 0)
+		return -ENOSPC;
+
+	if (!irq_remapping_enabled) {
+		ret = setup_msi_irq(dev, msidesc, irq, 0);
+		if (ret < 0)
+			goto error;
+		return 0;
+	}
+
+	msidesc->msi_attrib.multiple = ilog2(nvec);
+	for (sub_handle = 0; sub_handle < nvec; sub_handle++) {
+		if (!sub_handle) {
+			index = msi_alloc_remapped_irq(dev, irq, nvec);
+			if (index < 0) {
+				ret = index;
+				goto error;
+			}
+		} else {
+			ret = msi_setup_remapped_irq(dev, irq + sub_handle,
+						     index, sub_handle);
+			if (ret < 0)
+				goto error;
+		}
+		ret = setup_msi_irq(dev, msidesc, irq, sub_handle);
+		if (ret < 0)
+			goto error;
+	}
+	return 0;
+
+error:
+	destroy_irqs(irq, nvec);
+
+	/* Restore altered MSI descriptor fields and prevent just destroyed
+	 * IRQs from tearing down again in default_teardown_msi_irqs()
+	 */
+	msidesc->irq = 0;
+	msidesc->msi_attrib.multiple = 0;
+
+	return ret;
+}
+
+int native_setup_msi_irqs(struct pci_dev *dev, int nvec, int type)
+{
+	if (type == PCI_CAP_ID_MSI)
+		return setup_msi_irqs(dev, nvec);
+	return setup_msix_irqs(dev, nvec);
 }
 
 void native_teardown_msi_irq(unsigned int irq)
