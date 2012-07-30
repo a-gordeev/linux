@@ -35,6 +35,7 @@ struct msi_desc {
 
 	u32 masked;			/* mask bits */
 	unsigned int irq;
+	unsigned int nvec;
 	struct list_head list;
 
 	union {

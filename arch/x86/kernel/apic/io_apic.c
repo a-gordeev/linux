@@ -3107,16 +3107,12 @@ static inline void destroy_irqs(unsigned int irq, unsigned int count)
 }
 
 static inline int
-can_create_pow_of_two_irqs(unsigned int from, unsigned int count)
+can_create_irqs(unsigned int from, unsigned int count)
 {
-	if ((count > 1) && (count % 2))
-		return -EINVAL;
-
-	for (; count; count = count / 2) {
+	for (; count; count = count - 1) {
 		if (!irq_can_alloc_irqs(from, count))
 			return count;
 	}
-
 	return -ENOSPC;
 }
 
@@ -3298,8 +3294,7 @@ int setup_msi_irqs(struct pci_dev *dev, int nvec)
 	if (nvec > 1 && !irq_remapping_enabled)
 		return 1;
 
-	nvec = __roundup_pow_of_two(nvec);
-	ret = can_create_pow_of_two_irqs(nr_irqs_gsi, nvec);
+	ret = can_create_irqs(nr_irqs_gsi, nvec);
 	if (ret != nvec)
 		return ret;
 
@@ -3307,11 +3302,13 @@ int setup_msi_irqs(struct pci_dev *dev, int nvec)
 	msidesc = list_entry(dev->msi_list.next, struct msi_desc, list);
 	WARN_ON(msidesc->irq);
 	WARN_ON(msidesc->msi_attrib.multiple);
+	WARN_ON(msidesc->nvec);
 
 	node = dev_to_node(&dev->dev);
 	irq = create_irqs(nr_irqs_gsi, nvec, node);
 	if (irq == 0)
 		return -ENOSPC;
+	msidesc->nvec = nvec;
 
 	if (!irq_remapping_enabled) {
 		ret = setup_msi_irq(dev, msidesc, irq, 0);
@@ -3320,7 +3317,7 @@ int setup_msi_irqs(struct pci_dev *dev, int nvec)
 		return 0;
 	}
 
-	msidesc->msi_attrib.multiple = ilog2(nvec);
+	msidesc->msi_attrib.multiple = ilog2(__roundup_pow_of_two(nvec));
 	for (sub_handle = 0; sub_handle < nvec; sub_handle++) {
 		if (!sub_handle) {
 			index = msi_alloc_remapped_irq(dev, irq, nvec);
@@ -3348,6 +3345,7 @@ error:
 	 */
 	msidesc->irq = 0;
 	msidesc->msi_attrib.multiple = 0;
+	msidesc->nvec = 0;
 
 	return ret;
 }
