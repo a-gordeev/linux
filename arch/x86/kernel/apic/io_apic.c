@@ -3142,7 +3142,7 @@ static int msi_compose_msg(struct pci_dev *pdev, unsigned int irq,
 
 	if (irq_remapped(cfg)) {
 		compose_remapped_msi_msg(pdev, irq, dest, msg, hpet_id);
-		return err;
+		return 0;
 	}
 
 	if (x2apic_enabled())
@@ -3169,7 +3169,7 @@ static int msi_compose_msg(struct pci_dev *pdev, unsigned int irq,
 			MSI_DATA_DELIVERY_LOWPRI) |
 		MSI_DATA_VECTOR(cfg->vector);
 
-	return err;
+	return 0;
 }
 
 static int
@@ -3251,7 +3251,7 @@ int setup_msix_irqs(struct pci_dev *dev, int nvec)
 	list_for_each_entry(msidesc, &dev->msi_list, list) {
 		irq = create_irq_nr(irq_want, node);
 		if (irq == 0)
-			return -1;
+			return -ENOSPC;
 		irq_want = irq + 1;
 		if (!irq_remapping_enabled)
 			goto no_ir;
