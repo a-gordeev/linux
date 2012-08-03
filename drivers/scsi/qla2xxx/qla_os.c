@@ -218,6 +218,12 @@ MODULE_PARM_DESC(ql2xmdenable,
 		"0 - MiniDump disabled. "
 		"1 (Default) - MiniDump enabled.");
 
+int ql2xmsimode = 0;
+module_param(ql2xmsimode, int, S_IRUGO);
+MODULE_PARM_DESC(ql2xmsimode,
+		"Select MSI mode. "
+		"Default is 0 - MSI-X. 1 - Multiple MSI. 2 - Disable MSI.");
+
 /*
  * SCSI host template entry points
  */

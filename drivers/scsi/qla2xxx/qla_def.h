@@ -2493,6 +2493,7 @@ struct qla_hw_data {
 		uint32_t	enable_led_scheme	:1;
 
 		uint32_t	msi_enabled		:1;
+		uint32_t	mmsi_enabled		:1;
 		uint32_t	msix_enabled		:1;
 		uint32_t	disable_serdes		:1;
 		uint32_t	gpsc_supported		:1;
@@ -2516,7 +2517,7 @@ struct qla_hw_data {
 		uint32_t	isp82xx_reset_owner:1;
 		uint32_t	isp82xx_no_md_cap:1;
 		uint32_t	host_shutting_down:1;
-		/* 30 bits */
+		/* 31 bits */
 	} flags;
 
 	/* This spinlock is used to protect "io transactions", you must

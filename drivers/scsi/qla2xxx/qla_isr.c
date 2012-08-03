@@ -2404,7 +2404,7 @@ static struct qla_init_msix_entry qla82xx_msix_entries[2] = {
 };
 
 static void
-qla24xx_disable_msix(struct qla_hw_data *ha)
+qla24xx_disable_msi(struct qla_hw_data *ha)
 {
 	int i;
 	struct qla_msix_entry *qentry;
@@ -2415,49 +2415,69 @@ qla24xx_disable_msix(struct qla_hw_data *ha)
 		if (qentry->have_irq)
 			free_irq(qentry->vector, qentry->rsp);
 	}
-	pci_disable_msix(ha->pdev);
+	if (ha->flags.mmsi_enabled)
+		pci_disable_msi(ha->pdev);
+	else
+		pci_disable_msix(ha->pdev);
 	kfree(ha->msix_entries);
 	ha->msix_entries = NULL;
 	ha->flags.msix_enabled = 0;
+	ha->flags.mmsi_enabled = 0;
 	ql_dbg(ql_dbg_init, vha, 0x0042,
 	    "Disabled the MSI.\n");
 }
 
+static struct msix_entry* alloc_msix_entries(unsigned int count)
+{
+	struct msix_entry *entries;
+	int i;
+
+	entries = kzalloc(sizeof(struct msix_entry) * count, GFP_KERNEL);
+	if (entries)
+		for (i = 0; i < count; i++)
+			entries[i].entry = i;
+
+	return entries;
+}
+
 static int
-qla24xx_enable_msix(struct qla_hw_data *ha, struct rsp_que *rsp)
+qla24xx_enable_msi(struct qla_hw_data *ha, struct rsp_que *rsp, bool msix)
 {
 #define MIN_MSIX_COUNT	2
 	int i, ret;
-	struct msix_entry *entries;
+	struct msix_entry *entries = NULL;
 	struct qla_msix_entry *qentry;
 	scsi_qla_host_t *vha = pci_get_drvdata(ha->pdev);
 
-	entries = kzalloc(sizeof(struct msix_entry) * ha->msix_count,
-			GFP_KERNEL);
-	if (!entries) {
-		ql_log(ql_log_warn, vha, 0x00bc,
-		    "Failed to allocate memory for msix_entry.\n");
-		return -ENOMEM;
+	if (msix) {
+		entries = alloc_msix_entries(ha->msix_count);
+		if (!entries) {
+			ql_log(ql_log_warn, vha, 0x00bc,
+			    "Failed to allocate memory for msix_entry.\n");
+			return -ENOMEM;
+		}
+		ret = pci_enable_msix(ha->pdev, entries, ha->msix_count);
+	} else {
+		ret = pci_enable_msi_block(ha->pdev, ha->msix_count);
 	}
 
-	for (i = 0; i < ha->msix_count; i++)
-		entries[i].entry = i;
-
-	ret = pci_enable_msix(ha->pdev, entries, ha->msix_count);
 	if (ret) {
 		if (ret < MIN_MSIX_COUNT)
 			goto msix_failed;
 
 		ql_log(ql_log_warn, vha, 0x00c6,
-		    "MSI-X: Failed to enable support "
+		    "MSI/MSI-X: Failed to enable support "
 		    "-- %d/%d\n Retry with %d vectors.\n",
 		    ha->msix_count, ret, ret);
 		ha->msix_count = ret;
-		ret = pci_enable_msix(ha->pdev, entries, ha->msix_count);
+		if (msix)
+			ret = pci_enable_msix(ha->pdev, entries, ha->msix_count);
+		else
+			ret = pci_enable_msi_block(ha->pdev, ha->msix_count);
 		if (ret) {
 msix_failed:
 			ql_log(ql_log_fatal, vha, 0x00c7,
-			    "MSI-X: Failed to enable support, "
+			    "MSI/MSI-X: Failed to enable support, "
 			    "giving   up -- %d/%d.\n",
 			    ha->msix_count, ret);
 			goto msix_out;
@@ -2473,16 +2493,23 @@ msix_failed:
 		goto msix_out;
 	}
 	ha->flags.msix_enabled = 1;
+	if (!msix)
+		ha->flags.mmsi_enabled = 1;
 
 	for (i = 0; i < ha->msix_count; i++) {
 		qentry = &ha->msix_entries[i];
-		qentry->vector = entries[i].vector;
-		qentry->entry = entries[i].entry;
+		if (ha->flags.mmsi_enabled) {
+			qentry->vector = ha->pdev->irq + i;
+			qentry->entry = i;
+		} else {
+			qentry->vector = entries[i].vector;
+			qentry->entry = entries[i].entry;
+		}
 		qentry->have_irq = 0;
 		qentry->rsp = NULL;
 	}
 
-	/* Enable MSI-X vectors for the base queue */
+	/* Enable MSI/MSI-X vectors for the base queue */
 	for (i = 0; i < 2; i++) {
 		qentry = &ha->msix_entries[i];
 		if (IS_QLA82XX(ha)) {
@@ -2496,9 +2523,9 @@ msix_failed:
 		}
 		if (ret) {
 			ql_log(ql_log_fatal, vha, 0x00cb,
-			    "MSI-X: unable to register handler -- %x/%d.\n",
+			    "MSI/MSI-X: unable to register handler -- %x/%d.\n",
 			    qentry->vector, ret);
-			qla24xx_disable_msix(ha);
+			qla24xx_disable_msi(ha);
 			ha->mqenable = 0;
 			goto msix_out;
 		}
@@ -2507,7 +2534,7 @@ msix_failed:
 		rsp->msix = qentry;
 	}
 
-	/* Enable MSI-X vector for response queue update for queue 0 */
+	/* Enable MSI/MSI-X vector for response queue update for queue 0 */
 	if (IS_QLA83XX(ha)) {
 		if (ha->msixbase && ha->mqiobase &&
 		    (ha->max_rsp_queues > 1 || ha->max_req_queues > 1))
@@ -2524,7 +2551,8 @@ msix_failed:
 	    ha->mqiobase, ha->max_rsp_queues, ha->max_req_queues);
 
 msix_out:
-	kfree(entries);
+	if (entries)
+		kfree(entries);
 	return ret;
 }
 
@@ -2536,6 +2564,9 @@ qla2x00_request_irqs(struct qla_hw_data *ha, struct rsp_que *rsp)
 	scsi_qla_host_t *vha = pci_get_drvdata(ha->pdev);
 
 	/* If possible, enable MSI-X. */
+	if (ql2xmsimode > 1)
+		goto skip_msi;
+
 	if (!IS_QLA2432(ha) && !IS_QLA2532(ha) && !IS_QLA8432(ha) &&
 		!IS_CNA_CAPABLE(ha) && !IS_QLA2031(ha))
 		goto skip_msi;
@@ -2551,6 +2582,9 @@ qla2x00_request_irqs(struct qla_hw_data *ha, struct rsp_que *rsp)
 		goto skip_msi;
 	}
 
+	if (ql2xmsimode > 0)
+		goto skip_msix;
+
 	if (IS_QLA2432(ha) && (ha->pdev->revision < QLA_MSIX_CHIP_REV_24XX)) {
 		ql_log(ql_log_warn, vha, 0x0035,
 		    "MSI-X; Unsupported ISP2432 (0x%X, 0x%X).\n",
@@ -2558,7 +2592,7 @@ qla2x00_request_irqs(struct qla_hw_data *ha, struct rsp_que *rsp)
 		goto skip_msix;
 	}
 
-	ret = qla24xx_enable_msix(ha, rsp);
+	ret = qla24xx_enable_msi(ha, rsp, true);
 	if (!ret) {
 		ql_dbg(ql_dbg_init, vha, 0x0036,
 		    "MSI-X: Enabled (0x%X, 0x%X).\n",
@@ -2572,6 +2606,16 @@ skip_msix:
 	if (!IS_QLA24XX(ha) && !IS_QLA2532(ha) && !IS_QLA8432(ha) &&
 	    !IS_QLA8001(ha))
 		goto skip_msi;
+
+	ret = qla24xx_enable_msi(ha, rsp, false);
+	if (!ret) {
+		ql_dbg(ql_dbg_init, vha, 0x0036,
+		    "Multiple MSI: Enabled (0x%X, 0x%X).\n",
+		    ha->chip_revision, ha->fw_attributes);
+		goto clear_risc_ints;
+	}
+	ql_log(ql_log_info, vha, 0x0037,
+	    "Multiple MSI Falling back-to MSI mode -%d.\n", ret);
 
 	ret = pci_enable_msi(ha->pdev);
 	if (!ret) {
@@ -2631,7 +2675,7 @@ qla2x00_free_irqs(scsi_qla_host_t *vha)
 	rsp = ha->rsp_q_map[0];
 
 	if (ha->flags.msix_enabled)
-		qla24xx_disable_msix(ha);
+		qla24xx_disable_msi(ha);
 	else if (ha->flags.msi_enabled) {
 		free_irq(ha->pdev->irq, rsp);
 		pci_disable_msi(ha->pdev);
