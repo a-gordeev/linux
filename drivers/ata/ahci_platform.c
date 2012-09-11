@@ -188,8 +188,7 @@ static int __init ahci_probe(struct platform_device *pdev)
 	ahci_init_controller(host);
 	ahci_print_info(host, "platform");
 
-	rc = ata_host_activate(host, irq, ahci_interrupt, IRQF_SHARED,
-			       &ahci_platform_sht);
+	rc = ahci_host_activate(host, irq, 0, &ahci_platform_sht);
 	if (rc)
 		goto err0;
 

@@ -409,7 +409,7 @@ static int acard_ahci_init_one(struct pci_dev *pdev, const struct pci_device_id 
 	struct device *dev = &pdev->dev;
 	struct ahci_host_priv *hpriv;
 	struct ata_host *host;
-	int n_ports, i, rc;
+	int n_ports, n_msis, i, rc;
 
 	VPRINTK("ENTER\n");
 
@@ -436,8 +436,7 @@ static int acard_ahci_init_one(struct pci_dev *pdev, const struct pci_device_id 
 		return -ENOMEM;
 	hpriv->flags |= (unsigned long)pi.private_data;
 
-	if (!(hpriv->flags & AHCI_HFLAG_NO_MSI))
-		pci_enable_msi(pdev);
+	n_msis = ahci_init_interrupts(pdev, hpriv);
 
 	hpriv->mmio = pcim_iomap_table(pdev)[AHCI_PCI_BAR];
 
@@ -499,8 +498,7 @@ static int acard_ahci_init_one(struct pci_dev *pdev, const struct pci_device_id 
 	acard_ahci_pci_print_info(host);
 
 	pci_set_master(pdev);
-	return ata_host_activate(host, pdev->irq, ahci_interrupt, IRQF_SHARED,
-				 &acard_ahci_sht);
+	return ahci_host_activate(host, pdev->irq, n_msis, &acard_ahci_sht);
 }
 
 module_pci_driver(acard_ahci_pci_driver);

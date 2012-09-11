@@ -1080,14 +1080,14 @@ int ahci_init_interrupts(struct pci_dev *pdev, struct ahci_host_priv *hpriv)
 	pci_intx(pdev, 1);
 	return 0;
 }
+EXPORT_SYMBOL_GPL(ahci_init_interrupts);
 
 /**
  *	ahci_host_activate - start AHCI host, request IRQs and register it
  *	@host: target ATA host
  *	@irq: base IRQ number to request
  *	@n_msis: number of MSIs allocated for this host
- *	@irq_handler: irq_handler used when requesting IRQs
- *	@irq_flags: irq_flags used when requesting IRQs
+ *	@sht: scsi_host_template to use when registering the host
  *
  *	Similar to ata_host_activate, but requests IRQs according to AHCI-1.1
  *	when multiple MSIs were allocated. That is one MSI per port, starting
@@ -1099,43 +1099,59 @@ int ahci_init_interrupts(struct pci_dev *pdev, struct ahci_host_priv *hpriv)
  *	RETURNS:
  *	0 on success, -errno otherwise.
  */
-int ahci_host_activate(struct ata_host *host, int irq, unsigned int n_msis)
+int ahci_host_activate(struct ata_host *host, int irq, unsigned int n_msis,
+		       struct scsi_host_template *sht)
 {
 	int i, rc;
-
-	/* Sharing Last Message among several ports is not supported */
-	if (n_msis < host->n_ports)
-		return -EINVAL;
+	unsigned int n_irqs;
 
 	rc = ata_host_start(host);
 	if (rc)
 		return rc;
 
-	for (i = 0; i < host->n_ports; i++) {
-		rc = devm_request_threaded_irq(host->dev,
-			irq + i, ahci_hw_interrupt, ahci_thread_fn, IRQF_SHARED,
-			dev_driver_string(host->dev), host->ports[i]);
+	n_irqs = min(host->n_ports, n_msis);
+	n_irqs = max(n_irqs, 1u);
+
+	if (n_irqs > 1) {
+		/* Sharing Last Message among several ports is not supported */
+		if (n_irqs < host->n_ports)
+			return -EINVAL;
+
+		for (i = 0; i < n_irqs; i++) {
+			rc = devm_request_threaded_irq(host->dev, irq + i,
+				ahci_multi_irqs_intr, ahci_port_thread_fn,
+				IRQF_SHARED, dev_driver_string(host->dev),
+				host->ports[i]);
+			if (rc)
+				goto out_free_irqs;
+		}
+	} else {
+		rc = devm_request_threaded_irq(host->dev, irq,
+			ahci_single_irq_intr, ahci_thread_fn, IRQF_SHARED,
+			dev_driver_string(host->dev), host);
 		if (rc)
-			goto out_free_irqs;
+			goto out;
 	}
 
-	for (i = 0; i < host->n_ports; i++)
+	for (i = 0; i < n_irqs; i++)
 		ata_port_desc(host->ports[i], "irq %d", irq + i);
 
-	rc = ata_host_register(host, &ahci_sht);
+	rc = ata_host_register(host, sht);
 	if (rc)
 		goto out_free_all_irqs;
 
 	return 0;
 
 out_free_all_irqs:
-	i = host->n_ports;
+	i = n_irqs;
 out_free_irqs:
 	for (i--; i >= 0; i--)
 		devm_free_irq(host->dev, irq + i, host->ports[i]);
+out:
 
 	return rc;
 }
+EXPORT_SYMBOL_GPL(ahci_host_activate);
 
 static int ahci_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 {
@@ -1233,8 +1249,6 @@ static int ahci_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	hpriv->mmio = pcim_iomap_table(pdev)[ahci_pci_bar];
 
 	n_msis = ahci_init_interrupts(pdev, hpriv);
-	if (n_msis > 1)
-		hpriv->flags |= AHCI_HFLAG_MULTI_MSI;
 
 	/* save initial config */
 	ahci_pci_save_initial_config(pdev, hpriv);
@@ -1332,11 +1346,7 @@ static int ahci_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	pci_set_master(pdev);
 
-	if (hpriv->flags & AHCI_HFLAG_MULTI_MSI)
-		return ahci_host_activate(host, pdev->irq, n_msis);
-
-	return ata_host_activate(host, pdev->irq, ahci_interrupt, IRQF_SHARED,
-				 &ahci_sht);
+	return ahci_host_activate(host, pdev->irq, n_msis, &ahci_sht);
 }
 
 module_pci_driver(ahci_pci_driver);
