@@ -1016,7 +1016,7 @@ static int test_pmu(void)
 
 	ret = stat(path, &st);
 	if (ret)
-		pr_debug("ommiting PMU cpu tests\n");
+		pr_debug("omitting PMU cpu tests\n");
 	return !ret;
 }
 
