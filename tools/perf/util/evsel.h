@@ -71,6 +71,7 @@ struct perf_evsel {
 	unsigned int		sample_size;
 	bool 			supported;
 	bool 			needs_swap;
+	bool			irq;
 	/* parse modifier helper */
 	int			exclude_GH;
 	struct perf_evsel	*leader;

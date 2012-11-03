@@ -145,6 +145,15 @@ retry:
 	if (exclude_guest_missing)
 		evsel->attr.exclude_guest = evsel->attr.exclude_host = 0;
 
+	if (perf_target__has_cpu(&target) && perf_target__has_task(&target)) {
+		evsel->irq = true;
+		ret = perf_evsel__open(evsel, perf_evsel__cpus(evsel),
+				       evsel_list->threads);
+		if (ret)
+			goto check_ret;
+		return 0;
+	}
+
 	if (perf_target__has_cpu(&target)) {
 		ret = perf_evsel__open_per_cpu(evsel, perf_evsel__cpus(evsel));
 		if (ret)
@@ -1108,6 +1117,8 @@ int cmd_stat(int argc, const char **argv, const char *prefix __maybe_unused)
 		     "event filter", parse_filter),
 	OPT_BOOLEAN('i', "no-inherit", &no_inherit,
 		    "child tasks do not inherit counters"),
+	OPT_STRING('I', "irq", &target.pid, "irq",
+		   "stat events on existing irq handler"),
 	OPT_STRING('p', "pid", &target.pid, "pid",
 		   "stat events on existing process id"),
 	OPT_STRING('t', "tid", &target.tid, "tid",

@@ -228,6 +228,7 @@ static int perf_record__open(struct perf_record *rec)
 	struct perf_evlist *evlist = rec->evlist;
 	struct perf_session *session = rec->session;
 	struct perf_record_opts *opts = &rec->opts;
+	int irq = false;
 	int rc = 0;
 
 	/*
@@ -238,6 +239,10 @@ static int perf_record__open(struct perf_record *rec)
 		perf_evlist__set_leader(evlist);
 
 	perf_evlist__config_attrs(evlist, opts);
+
+	if (perf_target__has_cpu(&opts->target) &&
+	    perf_target__has_task(&opts->target))
+		irq = true;
 
 	list_for_each_entry(pos, &evlist->entries, node) {
 		struct perf_event_attr *attr = &pos->attr;
@@ -254,6 +259,8 @@ static int perf_record__open(struct perf_record *rec)
 		 * different sample_types, etc.
 		 */
 		bool time_needed = attr->sample_type & PERF_SAMPLE_TIME;
+
+		pos->irq = irq;
 
 fallback_missing_features:
 		if (opts->exclude_guest_missing)
@@ -1000,6 +1007,8 @@ const struct option record_options[] = {
 		     parse_events_option),
 	OPT_CALLBACK(0, "filter", &record.evlist, "filter",
 		     "event filter", parse_filter),
+	OPT_STRING('I', "irq", &record.opts.target.pid, "irq",
+		    "record events on existing irq handler"),
 	OPT_STRING('p', "pid", &record.opts.target.pid, "pid",
 		    "record events on existing process id"),
 	OPT_STRING('t', "tid", &record.opts.target.tid, "tid",

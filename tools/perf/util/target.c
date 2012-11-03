@@ -20,12 +20,14 @@ enum perf_target_errno perf_target__validate(struct perf_target *target)
 	if (target->pid)
 		target->tid = target->pid;
 
+#if (0)
 	/* CPU and PID are mutually exclusive */
 	if (target->tid && target->cpu_list) {
 		target->cpu_list = NULL;
 		if (ret == PERF_ERRNO_TARGET__SUCCESS)
 			ret = PERF_ERRNO_TARGET__PID_OVERRIDE_CPU;
 	}
+#endif
 
 	/* UID and PID are mutually exclusive */
 	if (target->tid && target->uid_str) {
@@ -41,12 +43,14 @@ enum perf_target_errno perf_target__validate(struct perf_target *target)
 			ret = PERF_ERRNO_TARGET__UID_OVERRIDE_CPU;
 	}
 
+#if (0)
 	/* PID and SYSTEM are mutually exclusive */
 	if (target->tid && target->system_wide) {
 		target->system_wide = false;
 		if (ret == PERF_ERRNO_TARGET__SUCCESS)
 			ret = PERF_ERRNO_TARGET__PID_OVERRIDE_SYSTEM;
 	}
+#endif
 
 	/* UID and SYSTEM are mutually exclusive */
 	if (target->uid_str && target->system_wide) {
