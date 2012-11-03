@@ -1021,6 +1021,9 @@ static int __perf_evsel__open(struct perf_evsel *evsel, struct cpu_map *cpus,
 		pid = evsel->cgrp->fd;
 	}
 
+	if (evsel->irq)
+		flags = PERF_FLAG_PID_HARDIRQ;
+
 fallback_missing_features:
 	if (perf_missing_features.mmap2)
 		evsel->attr.mmap2 = 0;

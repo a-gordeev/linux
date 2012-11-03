@@ -159,8 +159,12 @@ static struct thread_map *thread_map__new_by_pid_str(const char *pid_str)
 	struct thread_map *threads = NULL, *nt;
 	char name[256];
 	int items, total_tasks = 0;
+#if (0)
 	struct dirent **namelist = NULL;
 	int i, j = 0;
+#else
+	int j = 0;
+#endif
 	pid_t pid, prev_pid = INT_MAX;
 	char *end_ptr;
 	struct str_node *pos;
@@ -180,7 +184,11 @@ static struct thread_map *thread_map__new_by_pid_str(const char *pid_str)
 			continue;
 
 		sprintf(name, "/proc/%d/task", pid);
+#if (0)
 		items = scandir(name, &namelist, filter, NULL);
+#else
+		items = 1;
+#endif
 		if (items <= 0)
 			goto out_free_threads;
 
@@ -192,12 +200,18 @@ static struct thread_map *thread_map__new_by_pid_str(const char *pid_str)
 
 		threads = nt;
 
+#if (0)
 		for (i = 0; i < items; i++) {
 			threads->map[j++] = atoi(namelist[i]->d_name);
 			free(namelist[i]);
 		}
+#else
+		threads->map[j++] = pid;
+#endif
 		threads->nr = total_tasks;
+#if (0)
 		free(namelist);
+#endif
 	}
 
 out:
@@ -205,9 +219,11 @@ out:
 	return threads;
 
 out_free_namelist:
+#if (0)
 	for (i = 0; i < items; i++)
 		free(namelist[i]);
 	free(namelist);
+#endif
 
 out_free_threads:
 	free(threads);
