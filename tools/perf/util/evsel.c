@@ -833,6 +833,9 @@ static int __perf_evsel__open(struct perf_evsel *evsel, struct cpu_map *cpus,
 		pid = evsel->cgrp->fd;
 	}
 
+	if (evsel->irq)
+		flags = PERF_FLAG_PID_IRQ;
+
 fallback_missing_features:
 	if (perf_missing_features.exclude_guest)
 		evsel->attr.exclude_guest = evsel->attr.exclude_host = 0;

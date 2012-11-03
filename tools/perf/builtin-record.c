@@ -226,11 +226,17 @@ static int perf_record__open(struct perf_record *rec)
 	struct perf_evlist *evlist = rec->evlist;
 	struct perf_session *session = rec->session;
 	struct perf_record_opts *opts = &rec->opts;
+	int irq = false;
 	int rc = 0;
 
 	perf_evlist__config(evlist, opts);
 
+	if (perf_target__has_cpu(&opts->target) &&
+	    perf_target__has_task(&opts->target))
+		irq = true;
+
 	list_for_each_entry(pos, &evlist->entries, node) {
+		pos->irq = irq;
 try_again:
 		if (perf_evsel__open(pos, evlist->cpus, evlist->threads) < 0) {
 			if (perf_evsel__fallback(pos, errno, msg, sizeof(msg))) {
@@ -894,6 +900,8 @@ const struct option record_options[] = {
 		     parse_events_option),
 	OPT_CALLBACK(0, "filter", &record.evlist, "filter",
 		     "event filter", parse_filter),
+	OPT_STRING('I', "irq", &record.opts.target.pid, "irq",
+		    "record events on existing irq handler"),
 	OPT_STRING('p', "pid", &record.opts.target.pid, "pid",
 		    "record events on existing process id"),
 	OPT_STRING('t', "tid", &record.opts.target.tid, "tid",
