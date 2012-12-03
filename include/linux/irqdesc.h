@@ -65,6 +65,9 @@ struct irq_desc {
 #ifdef CONFIG_PROC_FS
 	struct proc_dir_entry	*dir;
 #endif
+#ifdef CONFIG_PERF_EVENTS
+	struct list_head * __percpu event_list;
+#endif
 	struct module		*owner;
 	const char		*name;
 } ____cacheline_internodealigned_in_smp;

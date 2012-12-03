@@ -197,6 +197,9 @@ struct pmu {
 	void (*pmu_enable)		(struct pmu *pmu); /* optional */
 	void (*pmu_disable)		(struct pmu *pmu); /* optional */
 
+	void (*pmu_enable_irq)		(struct pmu *pmu, int irq); /* opt. */
+	void (*pmu_disable_irq)		(struct pmu *pmu, int irq); /* opt. */
+
 	/*
 	 * Try and initialize the event for this PMU.
 	 * Should return -ENOENT when the @event doesn't match this PMU.
@@ -320,6 +323,7 @@ struct perf_event {
 	struct list_head		group_entry;
 	struct list_head		event_entry;
 	struct list_head		sibling_list;
+	struct list_head		irq_desc_list;
 	struct hlist_node		hlist_entry;
 	int				nr_siblings;
 	int				group_flags;
@@ -392,6 +396,7 @@ struct perf_event {
 
 	int				oncpu;
 	int				cpu;
+	int				irq;
 
 	struct list_head		owner_entry;
 	struct task_struct		*owner;
@@ -544,6 +549,8 @@ extern void perf_event_delayed_put(struct task_struct *task);
 extern void perf_event_print_debug(void);
 extern void perf_pmu_disable(struct pmu *pmu);
 extern void perf_pmu_enable(struct pmu *pmu);
+extern void perf_pmu_disable_irq(struct pmu *pmu, int irq);
+extern void perf_pmu_enable_irq(struct pmu *pmu, int irq);
 extern int perf_event_task_disable(void);
 extern int perf_event_task_enable(void);
 extern int perf_event_refresh(struct perf_event *event, int refresh);
@@ -622,6 +629,11 @@ static inline bool is_sampling_event(struct perf_event *event)
 static inline int is_software_event(struct perf_event *event)
 {
 	return event->pmu->task_ctx_nr == perf_sw_context;
+}
+
+static inline bool is_interrupt_event(struct perf_event *event)
+{
+	return event->irq >= 0;
 }
 
 extern struct static_key perf_swevent_enabled[PERF_COUNT_SW_MAX];
@@ -753,6 +765,8 @@ extern void perf_event_enable(struct perf_event *event);
 extern void perf_event_disable(struct perf_event *event);
 extern int __perf_event_disable(void *info);
 extern void perf_event_task_tick(void);
+extern int perf_event_irq_add(struct perf_event *event);
+extern int perf_event_irq_del(struct perf_event *event);
 #else
 static inline void
 perf_event_task_sched_in(struct task_struct *prev,
@@ -792,6 +806,8 @@ static inline void perf_event_enable(struct perf_event *event)		{ }
 static inline void perf_event_disable(struct perf_event *event)		{ }
 static inline int __perf_event_disable(void *info)			{ return -1; }
 static inline void perf_event_task_tick(void)				{ }
+extern inline int perf_event_irq_add(struct perf_event *event)	{ return -EINVAL; }
+extern inline int perf_event_irq_del(struct perf_event *event)	{ return -EINVAL; }
 #endif
 
 #define perf_output_put(handle, x) perf_output_copy((handle), &(x), sizeof(x))
