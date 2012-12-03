@@ -131,6 +131,14 @@ static void free_masks(struct irq_desc *desc)
 static inline void free_masks(struct irq_desc *desc) { }
 #endif
 
+#ifdef CONFIG_PERF_EVENTS
+extern int alloc_perf_events(struct irq_desc *desc);
+extern void free_perf_events(struct irq_desc *desc);
+#else
+static inline int alloc_perf_events(struct irq_desc *desc) { return 0; }
+static inline void free_perf_events(struct irq_desc *desc) { }
+#endif
+
 static struct irq_desc *alloc_desc(int irq, int node, struct module *owner)
 {
 	struct irq_desc *desc;
@@ -147,6 +155,9 @@ static struct irq_desc *alloc_desc(int irq, int node, struct module *owner)
 	if (alloc_masks(desc, gfp, node))
 		goto err_kstat;
 
+	if (alloc_perf_events(desc))
+		goto err_masks;
+
 	raw_spin_lock_init(&desc->lock);
 	lockdep_set_class(&desc->lock, &irq_desc_lock_class);
 
@@ -154,6 +165,8 @@ static struct irq_desc *alloc_desc(int irq, int node, struct module *owner)
 
 	return desc;
 
+err_masks:
+	free_masks(desc);
 err_kstat:
 	free_percpu(desc->kstat_irqs);
 err_desc:
@@ -171,6 +184,7 @@ static void free_desc(unsigned int irq)
 	delete_irq_desc(irq);
 	mutex_unlock(&sparse_irq_lock);
 
+	free_perf_events(desc);
 	free_masks(desc);
 	free_percpu(desc->kstat_irqs);
 	kfree(desc);

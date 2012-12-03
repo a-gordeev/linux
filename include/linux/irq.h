@@ -618,6 +618,14 @@ static inline int irq_reserve_irq(unsigned int irq)
 # define irq_reg_readl(addr)		readl(addr)
 #endif
 
+#ifdef CONFIG_PERF_EVENTS
+extern void perf_enable_irq_events(struct irq_desc *desc);
+extern void perf_disable_irq_events(struct irq_desc *desc);
+#else
+static inline void perf_enable_irq_events(struct irq_desc *desc)	{ }
+static inline void perf_disable_irq_events(struct irq_desc *desc)	{ }
+#endif
+
 /**
  * struct irq_chip_regs - register offsets for struct irq_gci
  * @enable:	Enable register offset to reg_base
