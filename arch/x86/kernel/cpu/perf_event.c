@@ -525,6 +525,11 @@ static void x86_pmu_disable(struct pmu *pmu)
 	x86_pmu.disable_all();
 }
 
+static void x86_pmu__disable_irq(struct pmu *pmu, int irq)
+{
+	x86_pmu.disable_irq(irq);
+}
+
 void x86_pmu_enable_all(int added)
 {
 	struct cpu_hw_events *cpuc = &__get_cpu_var(cpu_hw_events);
@@ -538,6 +543,10 @@ void x86_pmu_enable_all(int added)
 
 		__x86_pmu_enable_event(hwc, ARCH_PERFMON_EVENTSEL_ENABLE);
 	}
+}
+
+void x86_pmu_enable_irq_nop_int(int irq)
+{
 }
 
 static struct pmu pmu;
@@ -920,6 +929,11 @@ static void x86_pmu_enable(struct pmu *pmu)
 	x86_pmu.enable_all(added);
 }
 
+static void x86_pmu__enable_irq(struct pmu *pmu, int irq)
+{
+	x86_pmu.enable_irq(irq);
+}
+
 static DEFINE_PER_CPU(u64 [X86_PMC_IDX_MAX], pmc_prev_left);
 
 /*
@@ -1065,7 +1079,12 @@ static void x86_pmu_start(struct perf_event *event, int flags)
 	event->hw.state = 0;
 
 	cpuc->events[idx] = event;
-	__set_bit(idx, cpuc->active_mask);
+	if (is_interrupt_event(event)) {
+		__set_bit(idx, cpuc->actirq_mask);
+		perf_event_irq_add(event);
+	} else {
+		__set_bit(idx, cpuc->active_mask);
+	}
 	__set_bit(idx, cpuc->running);
 	x86_pmu.enable(event);
 	perf_event_update_userpage(event);
@@ -1102,6 +1121,7 @@ void perf_event_print_debug(void)
 		pr_info("CPU#%d: pebs:       %016llx\n", cpu, pebs);
 	}
 	pr_info("CPU#%d: active:     %016llx\n", cpu, *(u64 *)cpuc->active_mask);
+	pr_info("CPU#%d: actirq:     %016llx\n", cpu, *(u64 *)cpuc->actirq_mask);
 
 	for (idx = 0; idx < x86_pmu.num_counters; idx++) {
 		rdmsrl(x86_pmu_config_addr(idx), pmc_ctrl);
@@ -1130,8 +1150,11 @@ void x86_pmu_stop(struct perf_event *event, int flags)
 	struct cpu_hw_events *cpuc = &__get_cpu_var(cpu_hw_events);
 	struct hw_perf_event *hwc = &event->hw;
 
-	if (__test_and_clear_bit(hwc->idx, cpuc->active_mask)) {
+	if (__test_and_clear_bit(hwc->idx, cpuc->active_mask) ||
+	    __test_and_clear_bit(hwc->idx, cpuc->actirq_mask)) {
 		x86_pmu.disable(event);
+		if (unlikely(is_interrupt_event(event)))
+			perf_event_irq_del(event);
 		cpuc->events[hwc->idx] = NULL;
 		WARN_ON_ONCE(hwc->state & PERF_HES_STOPPED);
 		hwc->state |= PERF_HES_STOPPED;
@@ -1199,7 +1222,8 @@ int x86_pmu_handle_irq(struct pt_regs *regs)
 	apic_write(APIC_LVTPC, APIC_DM_NMI);
 
 	for (idx = 0; idx < x86_pmu.num_counters; idx++) {
-		if (!test_bit(idx, cpuc->active_mask)) {
+		if (!test_bit(idx, cpuc->active_mask) &&
+		    !test_bit(idx, cpuc->actirq_mask)) {
 			/*
 			 * Though we deactivated the counter some cpus
 			 * might still deliver spurious interrupts still
@@ -1825,6 +1849,9 @@ EXPORT_SYMBOL_GPL(perf_check_microcode);
 static struct pmu pmu = {
 	.pmu_enable		= x86_pmu_enable,
 	.pmu_disable		= x86_pmu_disable,
+
+	.pmu_enable_irq		= x86_pmu__enable_irq,
+	.pmu_disable_irq	= x86_pmu__disable_irq,
 
 	.attr_groups		= x86_pmu_attr_groups,
 

@@ -125,6 +125,7 @@ struct cpu_hw_events {
 	 */
 	struct perf_event	*events[X86_PMC_IDX_MAX]; /* in counter order */
 	unsigned long		active_mask[BITS_TO_LONGS(X86_PMC_IDX_MAX)];
+	unsigned long		actirq_mask[BITS_TO_LONGS(X86_PMC_IDX_MAX)];
 	unsigned long		running[BITS_TO_LONGS(X86_PMC_IDX_MAX)];
 	int			enabled;
 
@@ -345,6 +346,8 @@ struct x86_pmu {
 	int		(*handle_irq)(struct pt_regs *);
 	void		(*disable_all)(void);
 	void		(*enable_all)(int added);
+	void		(*disable_irq)(int irq);
+	void		(*enable_irq)(int irq);
 	void		(*enable)(struct perf_event *);
 	void		(*disable)(struct perf_event *);
 	int		(*hw_config)(struct perf_event *event);
@@ -527,6 +530,8 @@ static inline void __x86_pmu_enable_event(struct hw_perf_event *hwc,
 }
 
 void x86_pmu_enable_all(int added);
+
+void x86_pmu_enable_irq_nop_int(int irq);
 
 int perf_assign_events(struct event_constraint **constraints, int n,
 			int wmin, int wmax, int *assign);
