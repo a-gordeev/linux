@@ -496,15 +496,23 @@ void x86_pmu_disable_all(void)
 	int idx;
 
 	for (idx = 0; idx < x86_pmu.num_counters; idx++) {
-		u64 val;
-
 		if (!test_bit(idx, cpuc->active_mask))
 			continue;
-		rdmsrl(x86_pmu_config_addr(idx), val);
-		if (!(val & ARCH_PERFMON_EVENTSEL_ENABLE))
+		__x86_pmu_disable_event(idx, ARCH_PERFMON_EVENTSEL_ENABLE);
+	}
+}
+
+void x86_pmu_disable_irq(int irq)
+{
+	struct cpu_hw_events *cpuc = &__get_cpu_var(cpu_hw_events);
+	int idx;
+
+	for (idx = 0; idx < x86_pmu.num_counters; idx++) {
+		if (!test_bit(idx, cpuc->actirq_mask))
 			continue;
-		val &= ~ARCH_PERFMON_EVENTSEL_ENABLE;
-		wrmsrl(x86_pmu_config_addr(idx), val);
+		if (cpuc->events[idx]->irq != irq)
+			continue;
+		__x86_pmu_disable_event(idx, ARCH_PERFMON_EVENTSEL_ENABLE);
 	}
 }
 
@@ -547,6 +555,24 @@ void x86_pmu_enable_all(int added)
 
 void x86_pmu_enable_irq_nop_int(int irq)
 {
+}
+
+void x86_pmu_enable_irq(int irq)
+{
+	struct cpu_hw_events *cpuc = &__get_cpu_var(cpu_hw_events);
+	int idx;
+
+	for (idx = 0; idx < x86_pmu.num_counters; idx++) {
+		struct perf_event *event = cpuc->events[idx];
+
+		if (!test_bit(idx, cpuc->actirq_mask))
+			continue;
+		if (event->irq != irq)
+			continue;
+
+		__x86_pmu_enable_event(&event->hw,
+				       ARCH_PERFMON_EVENTSEL_ENABLE);
+	}
 }
 
 static struct pmu pmu;
