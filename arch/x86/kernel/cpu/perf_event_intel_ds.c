@@ -784,7 +784,7 @@ static void intel_pmu_drain_pebs_core(struct pt_regs *iregs)
 	 */
 	ds->pebs_index = ds->pebs_buffer_base;
 
-	if (!test_bit(0, cpuc->active_mask))
+	if (!test_bit(0, cpuc->active_mask) && !test_bit(0, cpuc->actirq_mask))
 		return;
 
 	WARN_ON_ONCE(!event);
@@ -836,7 +836,8 @@ static void intel_pmu_drain_pebs_nhm(struct pt_regs *iregs)
 	for ( ; at < top; at++) {
 		for_each_set_bit(bit, (unsigned long *)&at->status, x86_pmu.max_pebs_events) {
 			event = cpuc->events[bit];
-			if (!test_bit(bit, cpuc->active_mask))
+			if (!test_bit(bit, cpuc->active_mask) &&
+			    !test_bit(bit, cpuc->actirq_mask))
 				continue;
 
 			WARN_ON_ONCE(!event);

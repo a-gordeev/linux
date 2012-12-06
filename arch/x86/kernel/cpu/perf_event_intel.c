@@ -878,6 +878,24 @@ static inline bool intel_pmu_needs_lbr_smpl(struct perf_event *event)
 	return false;
 }
 
+u64 __get_intel_ctrl_irq_mask(struct cpu_hw_events *cpuc, int irq)
+{
+	int idx;
+	u64 ret = 0;
+
+	for (idx = 0; idx < x86_pmu.num_counters; idx++) {
+		struct perf_event *event = cpuc->events[idx];
+
+		if (!test_bit(idx, cpuc->actirq_mask))
+			continue;
+
+		if ((event->irq == irq) || (irq < 0))
+			ret |= (1ull << event->hw.idx);
+	}
+
+	return ret;
+}
+
 static void intel_pmu_disable_all(void)
 {
 	struct cpu_hw_events *cpuc = &__get_cpu_var(cpu_hw_events);
@@ -891,14 +909,14 @@ static void intel_pmu_disable_all(void)
 	intel_pmu_lbr_disable_all();
 }
 
-static void intel_pmu_enable_all(int added)
+static void __intel_pmu_enable(u64 control)
 {
 	struct cpu_hw_events *cpuc = &__get_cpu_var(cpu_hw_events);
 
 	intel_pmu_pebs_enable_all();
 	intel_pmu_lbr_enable_all();
-	wrmsrl(MSR_CORE_PERF_GLOBAL_CTRL,
-			x86_pmu.intel_ctrl & ~cpuc->intel_ctrl_guest_mask);
+
+	wrmsrl(MSR_CORE_PERF_GLOBAL_CTRL, control);
 
 	if (test_bit(INTEL_PMC_IDX_FIXED_BTS, cpuc->active_mask)) {
 		struct perf_event *event =
@@ -909,6 +927,33 @@ static void intel_pmu_enable_all(int added)
 
 		intel_pmu_enable_bts(event->hw.config);
 	}
+}
+
+static void intel_pmu_enable_all(int added)
+{
+	struct cpu_hw_events *cpuc = &__get_cpu_var(cpu_hw_events);
+	u64 irq_mask = __get_intel_ctrl_irq_mask(cpuc, -1);
+
+	__intel_pmu_enable(x86_pmu.intel_ctrl &
+			 ~(cpuc->intel_ctrl_guest_mask | irq_mask));
+}
+
+static void intel_pmu_disable_irq(int irq)
+{
+	struct cpu_hw_events *cpuc = &__get_cpu_var(cpu_hw_events);
+	u64 irq_mask = __get_intel_ctrl_irq_mask(cpuc, irq);
+
+	wrmsrl(MSR_CORE_PERF_GLOBAL_CTRL,
+		x86_pmu.intel_ctrl & ~(cpuc->intel_ctrl_guest_mask | irq_mask));
+}
+
+static void intel_pmu_enable_irq(int irq)
+{
+	struct cpu_hw_events *cpuc = &__get_cpu_var(cpu_hw_events);
+	u64 irq_mask = __get_intel_ctrl_irq_mask(cpuc, irq);
+
+	wrmsrl(MSR_CORE_PERF_GLOBAL_CTRL,
+		(x86_pmu.intel_ctrl & ~cpuc->intel_ctrl_guest_mask) | irq_mask);
 }
 
 /*
@@ -990,6 +1035,15 @@ static void intel_pmu_nhm_enable_all(int added)
 	if (added)
 		intel_pmu_nhm_workaround();
 	intel_pmu_enable_all(added);
+}
+
+static inline u64 intel_pmu_get_control(void)
+{
+	u64 control;
+
+	rdmsrl(MSR_CORE_PERF_GLOBAL_CTRL, control);
+
+	return control;
 }
 
 static inline u64 intel_pmu_get_status(void)
@@ -1161,7 +1215,7 @@ static int intel_pmu_handle_irq(struct pt_regs *regs)
 	struct perf_sample_data data;
 	struct cpu_hw_events *cpuc;
 	int bit, loops;
-	u64 status;
+	u64 control, status;
 	int handled;
 
 	cpuc = &__get_cpu_var(cpu_hw_events);
@@ -1176,11 +1230,12 @@ static int intel_pmu_handle_irq(struct pt_regs *regs)
 	 */
 	apic_write(APIC_LVTPC, APIC_DM_NMI);
 
+	control = intel_pmu_get_control();
 	intel_pmu_disable_all();
 	handled = intel_pmu_drain_bts_buffer();
 	status = intel_pmu_get_status();
 	if (!status) {
-		intel_pmu_enable_all(0);
+		__intel_pmu_enable(control);
 		return handled;
 	}
 
@@ -1211,7 +1266,8 @@ again:
 
 		handled++;
 
-		if (!test_bit(bit, cpuc->active_mask))
+		if (!test_bit(bit, cpuc->active_mask) &&
+		    !test_bit(bit, cpuc->actirq_mask))
 			continue;
 
 		if (!intel_pmu_save_and_restart(event))
@@ -1234,7 +1290,7 @@ again:
 		goto again;
 
 done:
-	intel_pmu_enable_all(0);
+	__intel_pmu_enable(control);
 	return handled;
 }
 
@@ -1839,8 +1895,8 @@ static __initconst const struct x86_pmu intel_pmu = {
 	.handle_irq		= intel_pmu_handle_irq,
 	.disable_all		= intel_pmu_disable_all,
 	.enable_all		= intel_pmu_enable_all,
-	.disable_irq		= x86_pmu_enable_irq_nop_int,
-	.enable_irq		= x86_pmu_enable_irq_nop_int,
+	.disable_irq		= intel_pmu_disable_irq,
+	.enable_irq		= intel_pmu_enable_irq,
 	.enable			= intel_pmu_enable_event,
 	.disable		= intel_pmu_disable_event,
 	.hw_config		= intel_pmu_hw_config,
