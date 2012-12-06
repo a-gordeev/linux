@@ -519,6 +519,19 @@ int x86_pmu_hw_config(struct perf_event *event);
 
 void x86_pmu_disable_all(void);
 
+void x86_pmu_disable_irq(int irq);
+
+static void inline __x86_pmu_disable_event(int idx, u64 enable_mask)
+{
+	u64 val;
+
+	rdmsrl(x86_pmu_config_addr(idx), val);
+	if (val & enable_mask) {
+		val &= ~enable_mask;
+		wrmsrl(x86_pmu_config_addr(idx), val);
+	}
+}
+
 static inline void __x86_pmu_enable_event(struct hw_perf_event *hwc,
 					  u64 enable_mask)
 {
@@ -531,6 +544,7 @@ static inline void __x86_pmu_enable_event(struct hw_perf_event *hwc,
 
 void x86_pmu_enable_all(int added);
 
+void x86_pmu_enable_irq(int irq);
 void x86_pmu_enable_irq_nop_int(int irq);
 
 int perf_assign_events(struct event_constraint **constraints, int n,
