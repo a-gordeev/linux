@@ -126,7 +126,7 @@ static void irq_wake_thread(struct irq_desc *desc, struct irqaction *action)
 	 */
 	atomic_inc(&desc->threads_active);
 
-	wake_up_process(action->thread);
+	wake_up_local(action->thread);
 }
 
 irqreturn_t

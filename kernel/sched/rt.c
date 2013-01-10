@@ -1234,7 +1234,7 @@ static void yield_task_rt(struct rq *rq)
 }
 
 #ifdef CONFIG_SMP
-static int find_lowest_rq(struct task_struct *task);
+static int find_lowest_rq(struct task_struct *task, bool prefer_this_cpu);
 
 static int
 select_task_rq_rt(struct task_struct *p, int sd_flag, int flags)
@@ -1242,6 +1242,7 @@ select_task_rq_rt(struct task_struct *p, int sd_flag, int flags)
 	struct task_struct *curr;
 	struct rq *rq;
 	int cpu;
+	bool prefer_this_cpu = flags & WF_LOCAL;
 
 	cpu = task_cpu(p);
 
@@ -1258,6 +1259,11 @@ select_task_rq_rt(struct task_struct *p, int sd_flag, int flags)
 	curr = ACCESS_ONCE(rq->curr); /* unlocked access */
 
 	/*
+	 * If this RT task is a threaded interrupt handler, then
+	 * it is being awaken from the hardware interrupt handler.
+	 * In this case try to keep hardware and threaded interrupt
+	 * handlers as close as possible and wake it up on this CPU.
+	 *
 	 * If the current task on @p's runqueue is an RT task, then
 	 * try to see if we can wake this RT task up on another
 	 * runqueue. Otherwise simply start this RT task
@@ -1279,11 +1285,12 @@ select_task_rq_rt(struct task_struct *p, int sd_flag, int flags)
 	 * This test is optimistic, if we get it wrong the load-balancer
 	 * will have to sort it out.
 	 */
-	if (curr && unlikely(rt_task(curr)) &&
-	    (curr->nr_cpus_allowed < 2 ||
-	     curr->prio <= p->prio) &&
-	    (p->nr_cpus_allowed > 1)) {
-		int target = find_lowest_rq(p);
+	if (prefer_this_cpu ||
+	    (curr && unlikely(rt_task(curr)) &&
+	     (curr->nr_cpus_allowed < 2 ||
+	      curr->prio <= p->prio) &&
+	     (p->nr_cpus_allowed > 1))) {
+		int target = find_lowest_rq(p, prefer_this_cpu);
 
 		if (target != -1)
 			cpu = target;
@@ -1473,7 +1480,7 @@ next_idx:
 
 static DEFINE_PER_CPU(cpumask_var_t, local_cpu_mask);
 
-static int find_lowest_rq(struct task_struct *task)
+static int find_lowest_rq(struct task_struct *task, bool prefer_this_cpu)
 {
 	struct sched_domain *sd;
 	struct cpumask *lowest_mask = __get_cpu_var(local_cpu_mask);
@@ -1495,9 +1502,13 @@ static int find_lowest_rq(struct task_struct *task)
 	 * lowest priority tasks in the system.  Now we want to elect
 	 * the best one based on our affinity and topology.
 	 *
+	 * If asked explicitly, try to pick up this cpu.
+	 *
 	 * We prioritize the last cpu that the task executed on since
 	 * it is most likely cache-hot in that location.
 	 */
+	if (prefer_this_cpu && cpumask_test_cpu(this_cpu, lowest_mask))
+		return this_cpu;
 	if (cpumask_test_cpu(cpu, lowest_mask))
 		return cpu;
 
@@ -1555,7 +1566,7 @@ static struct rq *find_lock_lowest_rq(struct task_struct *task, struct rq *rq)
 	int cpu;
 
 	for (tries = 0; tries < RT_MAX_TRIES; tries++) {
-		cpu = find_lowest_rq(task);
+		cpu = find_lowest_rq(task, false);
 
 		if ((cpu == -1) || (cpu == rq->cpu))
 			break;

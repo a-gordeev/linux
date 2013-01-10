@@ -1527,6 +1527,11 @@ int wake_up_process(struct task_struct *p)
 }
 EXPORT_SYMBOL(wake_up_process);
 
+int wake_up_local(struct task_struct *p)
+{
+	return try_to_wake_up(p, TASK_ALL, WF_LOCAL);
+}
+
 int wake_up_state(struct task_struct *p, unsigned int state)
 {
 	return try_to_wake_up(p, state, 0);
