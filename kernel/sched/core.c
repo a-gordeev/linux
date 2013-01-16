@@ -1272,6 +1272,27 @@ static void ttwu_activate(struct rq *rq, struct task_struct *p, int en_flags)
 		wq_worker_waking_up(p, cpu_of(rq));
 }
 
+static void try_to_wake_up_local(struct task_struct *p);
+
+static void uwtt_deactivate(struct rq *rq, struct task_struct *p, int de_flags)
+{
+	deactivate_task(rq, p, de_flags);
+	p->on_rq = 0;
+
+	/*
+	 * If a worker went to sleep, notify and ask workqueue
+	 * whether it wants to wake up a task to maintain
+	 * concurrency.
+	 */
+	if (p->flags & PF_WQ_WORKER) {
+		struct task_struct *to_wakeup;
+
+		to_wakeup = wq_worker_sleeping(p, cpu_of(rq));
+		if (to_wakeup)
+			try_to_wake_up_local(to_wakeup);
+	}
+}
+
 /*
  * Mark the task runnable and perform wakeup-preemption.
  */
@@ -2907,25 +2928,10 @@ need_resched:
 
 	switch_count = &prev->nivcsw;
 	if (prev->state && !(preempt_count() & PREEMPT_ACTIVE)) {
-		if (unlikely(signal_pending_state(prev->state, prev))) {
+		if (unlikely(signal_pending_state(prev->state, prev)))
 			prev->state = TASK_RUNNING;
-		} else {
-			deactivate_task(rq, prev, DEQUEUE_SLEEP);
-			prev->on_rq = 0;
-
-			/*
-			 * If a worker went to sleep, notify and ask workqueue
-			 * whether it wants to wake up a task to maintain
-			 * concurrency.
-			 */
-			if (prev->flags & PF_WQ_WORKER) {
-				struct task_struct *to_wakeup;
-
-				to_wakeup = wq_worker_sleeping(prev, cpu);
-				if (to_wakeup)
-					try_to_wake_up_local(to_wakeup);
-			}
-		}
+		else
+			uwtt_deactivate(rq, prev, DEQUEUE_SLEEP);
 		switch_count = &prev->nvcsw;
 	}
 
