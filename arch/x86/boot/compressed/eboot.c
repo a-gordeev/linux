@@ -295,10 +295,15 @@ static efi_status_t setup_efi_pci(struct boot_params *params)
 		if (!pci)
 			continue;
 
+#ifdef CONFIG_X86_64
 		status = efi_call_phys4(pci->attributes, pci,
 					EfiPciIoAttributeOperationGet, 0,
 					&attributes);
-
+#else
+		status = efi_call_phys5(pci->attributes, pci,
+					EfiPciIoAttributeOperationGet, 0, 0,
+					&attributes);
+#endif
 		if (status != EFI_SUCCESS)
 			continue;
 
@@ -432,10 +437,9 @@ static efi_status_t setup_gop(struct screen_info *si, efi_guid_t *proto,
 			 * Once we've found a GOP supporting ConOut,
 			 * don't bother looking any further.
 			 */
+			first_gop = gop;
 			if (conout_found)
 				break;
-
-			first_gop = gop;
 		}
 	}
 
