@@ -40,8 +40,14 @@ static int alloc_masks(struct irq_desc *desc, gfp_t gfp, int node)
 	if (!zalloc_cpumask_var_node(&desc->irq_data.affinity, gfp, node))
 		return -ENOMEM;
 
+	if (!zalloc_cpumask_var_node(&desc->irq_data.cpu_idle, gfp, node)) {
+		free_cpumask_var(desc->irq_data.affinity);
+		return -ENOMEM;
+	}
+
 #ifdef CONFIG_GENERIC_PENDING_IRQ
 	if (!zalloc_cpumask_var_node(&desc->pending_mask, gfp, node)) {
+		free_cpumask_var(desc->irq_data.cpu_idle);
 		free_cpumask_var(desc->irq_data.affinity);
 		return -ENOMEM;
 	}
@@ -125,6 +131,7 @@ static void free_masks(struct irq_desc *desc)
 #ifdef CONFIG_GENERIC_PENDING_IRQ
 	free_cpumask_var(desc->pending_mask);
 #endif
+	free_cpumask_var(desc->irq_data.cpu_idle);
 	free_cpumask_var(desc->irq_data.affinity);
 }
 #else

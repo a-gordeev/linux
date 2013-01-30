@@ -133,6 +133,18 @@ irq_get_pending(struct cpumask *mask, struct irq_desc *desc)
 {
 	cpumask_copy(mask, desc->pending_mask);
 }
+static inline const struct cpumask *irq_get_affinity(struct irq_desc *desc)
+{
+	struct irq_data *data = irq_desc_get_irq_data(desc);
+	struct cpumask *result;
+
+	if (irq_move_pending(data))
+		result = desc->pending_mask;
+	else
+		result = data->affinity;
+
+	return result;
+}
 #else
 static inline bool irq_can_move_pcntxt(struct irq_data *data) { return true; }
 static inline bool irq_move_pending(struct irq_data *data) { return false; }
@@ -140,6 +152,11 @@ static inline void
 irq_copy_pending(struct irq_desc *desc, const struct cpumask *mask) { }
 static inline void
 irq_get_pending(struct cpumask *mask, struct irq_desc *desc) { }
+static inline const struct cpumask *irq_get_affinity(struct irq_desc *desc)
+{
+	struct irq_data *data = irq_desc_get_irq_data(desc);
+	return data->affinity;
+}
 #endif
 
 int irq_do_set_affinity(struct irq_data *data, const struct cpumask *mask,
@@ -177,12 +194,6 @@ int __irq_set_affinity_locked(struct irq_data *data, const struct cpumask *mask)
 		irq_copy_pending(desc, mask);
 	}
 
-	if (desc->affinity_notify) {
-		kref_get(&desc->affinity_notify->kref);
-		schedule_work(&desc->affinity_notify->work);
-	}
-	irqd_set(data, IRQD_AFFINITY_SET);
-
 	return ret;
 }
 
@@ -195,15 +206,53 @@ int __irq_set_affinity_locked(struct irq_data *data, const struct cpumask *mask)
 int irq_set_affinity(unsigned int irq, const struct cpumask *mask)
 {
 	struct irq_desc *desc = irq_to_desc(irq);
+	struct irq_data *data;
+	cpumask_var_t affinity, cpu_idle;
 	unsigned long flags;
 	int ret;
 
 	if (!desc)
 		return -EINVAL;
 
+	if (!alloc_cpumask_var(&affinity, GFP_KERNEL))
+		return -ENOMEM;
+	if (!alloc_cpumask_var(&cpu_idle, GFP_KERNEL)) {
+		free_cpumask_var(affinity);
+		return -ENOMEM;
+	}
+
+	data = irq_desc_get_irq_data(desc);
+
 	raw_spin_lock_irqsave(&desc->lock, flags);
-	ret =  __irq_set_affinity_locked(irq_desc_get_irq_data(desc), mask);
+
+	if (!cpumask_empty(data->cpu_idle)) {
+		cpumask_and(cpu_idle, mask, data->cpu_idle);
+		cpumask_andnot(affinity, mask, cpu_idle);
+		if (cpumask_empty(affinity)) {
+			int cpu = cpumask_any(cpu_idle);
+			cpumask_set_cpu(cpu, affinity);
+			cpumask_clear_cpu(cpu, cpu_idle);
+		}
+		mask = affinity;
+	}
+
+	ret =  __irq_set_affinity_locked(data, mask);
+
+	if (!ret) {
+		cpumask_copy(data->cpu_idle, cpu_idle);
+
+		if (desc->affinity_notify) {
+			kref_get(&desc->affinity_notify->kref);
+			schedule_work(&desc->affinity_notify->work);
+		}
+		irqd_set(data, IRQD_AFFINITY_SET);
+	}
+
 	raw_spin_unlock_irqrestore(&desc->lock, flags);
+
+	free_cpumask_var(cpu_idle);
+	free_cpumask_var(affinity);
+
 	return ret;
 }
 
@@ -232,10 +281,13 @@ static void irq_affinity_notify(struct work_struct *work)
 		goto out;
 
 	raw_spin_lock_irqsave(&desc->lock, flags);
-	if (irq_move_pending(&desc->irq_data))
+	if (irq_move_pending(&desc->irq_data)) {
 		irq_get_pending(cpumask, desc);
-	else
-		cpumask_copy(cpumask, desc->irq_data.affinity);
+		cpumask_or(cpumask, cpumask, desc->irq_data.cpu_idle);
+	} else {
+		cpumask_or(cpumask,
+			   desc->irq_data.affinity, desc->irq_data.cpu_idle);
+	}
 	raw_spin_unlock_irqrestore(&desc->lock, flags);
 
 	notify->notify(notify, cpumask);
@@ -1688,4 +1740,85 @@ int request_percpu_irq(unsigned int irq, irq_handler_t handler,
 		kfree(action);
 
 	return retval;
+}
+
+/**
+ *	irq_cpu_idle_enter - Invoke all irq_cpu_idle_enter functions.
+ *
+ *	Iterate through all irqs and invoke the chip.irq_cpu_idle_enter()
+ *	for each.
+ */
+void irq_cpu_idle_enter(int cpu)
+{
+	cpumask_var_t cpumask;
+	unsigned int irq;
+
+	if (!alloc_cpumask_var(&cpumask, GFP_KERNEL))
+		return;
+
+	for_each_active_irq(irq) {
+		struct irq_desc *desc = irq_to_desc(irq);
+		struct irq_data *data;
+		const struct cpumask *mask;
+		unsigned long flags;
+
+		if (!desc)
+			continue;
+
+		data = irq_desc_get_irq_data(desc);
+
+		raw_spin_lock_irqsave(&desc->lock, flags);
+		if (!cpumask_test_cpu(cpu, data->cpu_idle)) {
+			mask = irq_get_affinity(desc);
+			if (cpumask_test_cpu(cpu, mask) &&
+			    (cpumask_weight(mask) > 1)) {
+				cpumask_andnot(cpumask, mask, cpumask_of(cpu));
+				if (!__irq_set_affinity_locked(data, cpumask))
+					cpumask_set_cpu(cpu, data->cpu_idle);
+			}
+		}
+		raw_spin_unlock_irqrestore(&desc->lock, flags);
+	}
+
+	free_cpumask_var(cpumask);
+}
+
+/**
+ *	irq_cpu_idle_exit - Invoke all irq_cpu_idle_exit functions.
+ *
+ *	Iterate through all irqs and invoke the chip.irq_cpu_idle_exit()
+ *	for each.
+ */
+void irq_cpu_idle_exit(int cpu)
+{
+	cpumask_var_t cpumask;
+	unsigned int irq;
+
+	if (!alloc_cpumask_var(&cpumask, GFP_KERNEL))
+		return;
+
+	for_each_active_irq(irq) {
+		struct irq_desc *desc = irq_to_desc(irq);
+		struct irq_data *data;
+		const struct cpumask *mask;
+		unsigned long flags;
+
+		if (!desc)
+			continue;
+
+		data = irq_desc_get_irq_data(desc);
+
+		raw_spin_lock_irqsave(&desc->lock, flags);
+		if (cpumask_test_cpu(cpu, data->cpu_idle)) {
+			mask = irq_get_affinity(desc);
+			if (!cpumask_test_cpu(cpu, mask)) {
+				cpumask_or(cpumask, mask, cpumask_of(cpu));
+				__irq_set_affinity_locked(data, cpumask);
+			}
+			cpumask_clear_cpu(cpu, data->cpu_idle);
+		}
+		raw_spin_unlock_irqrestore(&desc->lock, flags);
+	}
+
+	free_cpumask_var(cpumask);
 }

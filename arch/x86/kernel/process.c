@@ -315,6 +315,8 @@ void exit_idle(void)
  */
 void cpu_idle(void)
 {
+	int cpu = smp_processor_id();
+
 	/*
 	 * If we're the non-boot CPU, nothing set the stack canary up
 	 * for us.  CPU0 already has it initialized but no harm in
@@ -331,8 +333,10 @@ void cpu_idle(void)
 		while (!need_resched()) {
 			rmb();
 
-			if (cpu_is_offline(smp_processor_id()))
+			if (cpu_is_offline(cpu))
 				play_dead();
+
+			irq_cpu_idle_enter(cpu);
 
 			/*
 			 * Idle routines should keep interrupts disabled
@@ -360,6 +364,7 @@ void cpu_idle(void)
 			   has already called exit_idle. But some idle
 			   loops can be woken up without interrupt. */
 			__exit_idle();
+			irq_cpu_idle_exit(cpu);
 		}
 
 		tick_nohz_idle_exit();

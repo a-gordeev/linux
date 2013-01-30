@@ -148,6 +148,7 @@ struct irq_data {
 	void			*chip_data;
 	struct msi_desc		*msi_desc;
 	cpumask_var_t		affinity;
+	cpumask_var_t		cpu_idle;
 };
 
 /*
@@ -375,6 +376,8 @@ extern void remove_percpu_irq(unsigned int irq, struct irqaction *act);
 
 extern void irq_cpu_online(void);
 extern void irq_cpu_offline(void);
+extern void irq_cpu_idle_enter(int cpu);
+extern void irq_cpu_idle_exit(int cpu);
 extern int __irq_set_affinity_locked(struct irq_data *data,  const struct cpumask *cpumask);
 
 #ifdef CONFIG_GENERIC_HARDIRQS
