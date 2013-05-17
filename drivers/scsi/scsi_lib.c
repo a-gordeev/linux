@@ -1675,15 +1675,10 @@ u64 scsi_calculate_bounce_limit(struct Scsi_Host *shost)
 }
 EXPORT_SYMBOL(scsi_calculate_bounce_limit);
 
-struct request_queue *__scsi_alloc_queue(struct Scsi_Host *shost,
-					 request_fn_proc *request_fn)
+void scsi_init_request_queue(struct request_queue *q,
+			     struct Scsi_Host *shost)
 {
-	struct request_queue *q;
 	struct device *dev = shost->dma_dev;
-
-	q = blk_init_queue(request_fn, NULL);
-	if (!q)
-		return NULL;
 
 	/*
 	 * this limit is imposed by hardware restrictions
@@ -1716,6 +1711,19 @@ struct request_queue *__scsi_alloc_queue(struct Scsi_Host *shost,
 	 */
 	blk_queue_dma_alignment(q, 0x03);
 
+	return q;
+}
+
+struct request_queue *__scsi_alloc_queue(struct Scsi_Host *shost,
+					 request_fn_proc *request_fn)
+{
+	struct request_queue *q;
+
+	q = blk_init_queue(request_fn, NULL);
+	if (!q)
+		return NULL;
+
+	scsi_init_request_queue(q, shost);
 	return q;
 }
 EXPORT_SYMBOL(__scsi_alloc_queue);
