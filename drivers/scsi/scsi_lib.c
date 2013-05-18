@@ -1711,8 +1711,6 @@ void scsi_init_request_queue(struct request_queue *q,
 	 * blk_queue_update_dma_alignment() later.
 	 */
 	blk_queue_dma_alignment(q, 0x03);
-
-	return q;
 }
 
 struct request_queue *__scsi_alloc_queue(struct Scsi_Host *shost,

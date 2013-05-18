@@ -46,6 +46,7 @@
 
 #include "scsi_priv.h"
 #include "scsi_logging.h"
+#include "scsi-mq.h"
 
 #define ALLOC_FAILURE_MSG	KERN_ERR "%s: Allocation failure during" \
 	" SCSI scanning, some SCSI devices might not be configured\n"
@@ -209,6 +210,19 @@ static void scsi_unlock_floptical(struct scsi_device *sdev,
 			 SCSI_TIMEOUT, 3, NULL);
 }
 
+static int scsi_alloc_request_queue(struct scsi_device *sdev)
+{
+	sdev->request_queue = scsi_alloc_queue(sdev);
+	if (!sdev->request_queue)
+		return -ENOMEM;
+
+	WARN_ON_ONCE(!blk_get_queue(sdev->request_queue));
+	sdev->request_queue->queuedata = sdev;
+	scsi_adjust_queue_depth(sdev, 0, sdev->host->cmd_per_lun);
+
+	return 0;
+}
+
 /**
  * scsi_alloc_sdev - allocate and setup a scsi_Device
  * @starget: which target to allocate a &scsi_device for
@@ -277,18 +291,20 @@ static struct scsi_device *scsi_alloc_sdev(struct scsi_target *starget,
 	 */
 	sdev->borken = 1;
 
-	sdev->request_queue = scsi_alloc_queue(sdev);
-	if (!sdev->request_queue) {
-		/* release fn is set up in scsi_sysfs_device_initialise, so
-		 * have to free and put manually here */
+	if (shost->hostt->scsi_mq)
+		ret = scsi_mq_alloc_queue(shost, sdev);
+	else
+		ret = scsi_alloc_request_queue(sdev);
+
+	if (ret < 0) {
+		/*
+		 * release fn is set up in scsi_sysfs_device_initialise, so
+		 * have to free and put manually here
+		 */
 		put_device(&starget->dev);
 		kfree(sdev);
 		goto out;
 	}
-	WARN_ON_ONCE(!blk_get_queue(sdev->request_queue));
-	sdev->request_queue->queuedata = sdev;
-	scsi_adjust_queue_depth(sdev, 0, sdev->host->cmd_per_lun);
-
 	scsi_sysfs_device_initialize(sdev);
 
 	if (shost->hostt->slave_alloc) {
