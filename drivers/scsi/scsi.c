@@ -68,6 +68,7 @@
 
 #include "scsi_priv.h"
 #include "scsi_logging.h"
+#include "scsi-mq.h"
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/scsi.h>
@@ -660,7 +661,7 @@ static int __scsi_dispatch_cmd(struct Scsi_Host *host, struct scsi_cmnd *cmd)
 		 * returns an immediate error upwards, and signals
 		 * that the device is no longer present */
 		cmd->result = DID_NO_CONNECT << 16;
-		scsi_done(cmd);
+		cmd->scsi_done(cmd);
 		/* return 0 (because the command has been processed) */
 		return -ENODEV;
 	}
@@ -729,14 +730,16 @@ static int __scsi_dispatch_cmd(struct Scsi_Host *host, struct scsi_cmnd *cmd)
 			       "cdb_size=%d host->max_cmd_len=%d\n",
 			       cmd->cmd_len, cmd->device->host->max_cmd_len));
 		cmd->result = (DID_ABORT << 16);
-
-		scsi_done(cmd);
+		printk("__scsi_dispatch_cmd failure cmd_len: %u max_cmd_len:"
+			" %u\n", cmd->cmd_len, cmd->device->host->max_cmd_len);
+		dump_stack();
+		cmd->scsi_done(cmd);
 		return -EINVAL;
 	}
 
 	if (unlikely(host->shost_state == SHOST_DEL)) {
 		cmd->result = (DID_NO_CONNECT << 16);
-		scsi_done(cmd);
+		cmd->scsi_done(cmd);
 		return -ENODEV;
 	}
 
@@ -755,13 +758,23 @@ int scsi_dispatch_cmd(struct scsi_cmnd *cmd)
 	struct Scsi_Host *host = cmd->device->host;
 	int rtn = 0;
 
+	if (host->hostt->scsi_mq) {
+		cmd->scsi_done = scsi_mq_done;
+		cmd->end_request = scsi_mq_end_request;
+	} else {
+		cmd->scsi_done = scsi_done;
+		cmd->end_request = scsi_end_request;
+	}
+
 	rtn = __scsi_dispatch_cmd(host, cmd);
 	if (rtn < 0)
 		return 0;
 
 	trace_scsi_dispatch_cmd_start(cmd);
-	cmd->scsi_done = scsi_done;
-	rtn = host->hostt->queuecommand(host, cmd);
+	if (host->hostt->scsi_mq)
+		rtn = host->hostt->queuecommand_mq(host, cmd);
+	else
+		rtn = host->hostt->queuecommand(host, cmd);
 
 	if (rtn) {
 		trace_scsi_dispatch_cmd_error(cmd, rtn);

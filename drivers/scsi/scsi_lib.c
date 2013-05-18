@@ -852,7 +852,7 @@ void scsi_io_completion(struct scsi_cmnd *cmd, unsigned int good_bytes)
 	 * are leftovers and there is some kind of error
 	 * (result != 0), retry the rest.
 	 */
-	if (scsi_end_request(cmd, error, good_bytes, result == 0) == NULL)
+	if (cmd->end_request(cmd, error, good_bytes, result == 0) == NULL)
 		return;
 
 	error = __scsi_error_from_host_byte(cmd, result);
