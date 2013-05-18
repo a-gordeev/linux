@@ -1130,7 +1130,7 @@ int scsi_setup_blk_pc_cmnd(struct scsi_device *sdev, struct request *req)
 
 	if (ret != BLKPREP_OK)
 		return ret;
-
+//FIXME: Pass in pre-allocated *cmd for scsi-mq
 	cmd = scsi_get_cmd_from_req(sdev, req);
 	if (unlikely(!cmd))
 		return BLKPREP_DEFER;
@@ -1195,6 +1195,7 @@ int scsi_setup_fs_cmnd(struct scsi_device *sdev, struct request *req)
 	 */
 	BUG_ON(!req->nr_phys_segments);
 
+//FIXME: Pass in pre-allocated *cmd for scsi-mq
 	cmd = scsi_get_cmd_from_req(sdev, req);
 	if (unlikely(!cmd))
 		return BLKPREP_DEFER;

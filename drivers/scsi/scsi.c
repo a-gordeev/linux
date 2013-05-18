@@ -648,18 +648,9 @@ void scsi_cmd_get_serial(struct Scsi_Host *host, struct scsi_cmnd *cmd)
 }
 EXPORT_SYMBOL(scsi_cmd_get_serial);
 
-/**
- * scsi_dispatch_command - Dispatch a command to the low-level driver.
- * @cmd: command block we are dispatching.
- *
- * Return: nonzero return request was rejected and device's queue needs to be
- * plugged.
- */
-int scsi_dispatch_cmd(struct scsi_cmnd *cmd)
+static int __scsi_dispatch_cmd(struct Scsi_Host *host, struct scsi_cmnd *cmd)
 {
-	struct Scsi_Host *host = cmd->device->host;
 	unsigned long timeout;
-	int rtn = 0;
 
 	atomic_inc(&cmd->device->iorequest_cnt);
 
@@ -671,7 +662,7 @@ int scsi_dispatch_cmd(struct scsi_cmnd *cmd)
 		cmd->result = DID_NO_CONNECT << 16;
 		scsi_done(cmd);
 		/* return 0 (because the command has been processed) */
-		goto out;
+		return -ENODEV;
 	}
 
 	/* Check to see if the scsi lld made this device blocked. */
@@ -692,7 +683,7 @@ int scsi_dispatch_cmd(struct scsi_cmnd *cmd)
 		 * NOTE: rtn is still zero here because we don't need the
 		 * queue to be plugged on return (it's already stopped)
 		 */
-		goto out;
+		return -ENODEV;
 	}
 
 	/* 
@@ -740,17 +731,37 @@ int scsi_dispatch_cmd(struct scsi_cmnd *cmd)
 		cmd->result = (DID_ABORT << 16);
 
 		scsi_done(cmd);
-		goto out;
+		return -EINVAL;
 	}
 
 	if (unlikely(host->shost_state == SHOST_DEL)) {
 		cmd->result = (DID_NO_CONNECT << 16);
 		scsi_done(cmd);
-	} else {
-		trace_scsi_dispatch_cmd_start(cmd);
-		cmd->scsi_done = scsi_done;
-		rtn = host->hostt->queuecommand(host, cmd);
+		return -ENODEV;
 	}
+
+	return 0;
+}
+
+/**
+ * scsi_dispatch_command - Dispatch a command to the low-level driver.
+ * @cmd: command block we are dispatching.
+ *
+ * Return: nonzero return request was rejected and device's queue needs to be
+ * plugged.
+ */
+int scsi_dispatch_cmd(struct scsi_cmnd *cmd)
+{
+	struct Scsi_Host *host = cmd->device->host;
+	int rtn = 0;
+
+	rtn = __scsi_dispatch_cmd(host, cmd);
+	if (rtn < 0)
+		return 0;
+
+	trace_scsi_dispatch_cmd_start(cmd);
+	cmd->scsi_done = scsi_done;
+	rtn = host->hostt->queuecommand(host, cmd);
 
 	if (rtn) {
 		trace_scsi_dispatch_cmd_error(cmd, rtn);
@@ -764,8 +775,6 @@ int scsi_dispatch_cmd(struct scsi_cmnd *cmd)
 		    printk("queuecommand : request rejected\n"));
 	}
 
- out:
-	SCSI_LOG_MLQUEUE(3, printk("leaving scsi_dispatch_cmnd()\n"));
 	return rtn;
 }
 

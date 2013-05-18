@@ -301,6 +301,7 @@ static void scsi_host_dev_release(struct device *dev)
 	q = shost->uspace_req_q;
 	if (q) {
 		queuedata = q->queuedata;
+//FIXME: Add mq release caller
 		blk_cleanup_queue(q);
 		kfree(queuedata);
 	}
@@ -427,6 +428,7 @@ struct Scsi_Host *scsi_host_alloc(struct scsi_host_template *sht, int privsize)
 	shost->shost_dev.class = &shost_class;
 	dev_set_name(&shost->shost_dev, "host%d", shost->host_no);
 	shost->shost_dev.groups = scsi_sysfs_shost_attr_groups;
+//FIXME: Add extra scsi-mq scsi_host setup from LLD
 
 	shost->ehandler = kthread_run(scsi_error_handler, shost,
 			"scsi_eh_%d", shost->host_no);
