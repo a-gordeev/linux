@@ -5,6 +5,7 @@
 #include <linux/spinlock.h>
 #include <linux/workqueue.h>
 #include <linux/blkdev.h>
+#include <linux/blk-mq.h>
 #include <scsi/scsi.h>
 #include <linux/atomic.h>
 
@@ -178,6 +179,7 @@ struct scsi_device {
 	struct device		sdev_gendev,
 				sdev_dev;
 
+	struct blk_mq_reg	sdev_mq_reg;
 	struct execute_work	ew; /* used to get process context on put */
 	struct work_struct	requeue_work;
 

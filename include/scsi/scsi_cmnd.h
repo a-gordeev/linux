@@ -53,6 +53,7 @@ struct scsi_pointer {
 
 struct scsi_cmnd {
 	struct scsi_device *device;
+	struct llist_node ll_list;
 	struct list_head list;  /* scsi_cmnd participates in queue lists */
 	struct list_head eh_entry; /* entry for the host eh_cmd_q */
 	int eh_eflags;		/* Used by error handlr */
@@ -90,6 +91,7 @@ struct scsi_cmnd {
 	/* These elements define the operation we ultimately want to perform */
 	struct scsi_data_buffer sdb;
 	struct scsi_data_buffer *prot_sdb;
+	struct scatterlist *mq_sgl;
 
 	unsigned underflow;	/* Return error if less than
 				   this amount is transferred */
@@ -113,6 +115,8 @@ struct scsi_cmnd {
 	 *        to completion function.  Not used by mid/upper level code. */
 	void (*scsi_done) (struct scsi_cmnd *);
 
+	struct scsi_cmnd *(*end_request)(struct scsi_cmnd *, int, int, int);
+
 	/*
 	 * The following fields can be written to by the host specific code. 
 	 * Everything else should be left alone. 
@@ -130,6 +134,8 @@ struct scsi_cmnd {
 	int result;		/* Status code from lower level driver */
 
 	unsigned char tag;	/* SCSI-II queued command tag */
+
+	struct call_single_data csd;
 };
 
 /* make sure not to use it with REQ_TYPE_BLOCK_PC commands */

@@ -516,6 +516,10 @@ struct scsi_host_template {
 	 *   scsi_netlink.h
 	 */
 	u64 vendor_id;
+
+	bool scsi_mq;
+	unsigned int cmd_size;
+	int (*queuecommand_mq)(struct Scsi_Host *, struct scsi_cmnd *);
 };
 
 /*
