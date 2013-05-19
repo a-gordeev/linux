@@ -568,8 +568,8 @@ static void __scsi_release_buffers(struct scsi_cmnd *, int);
  *		at some point during this call.
  * Notes:	If cmd was requeued, upon return it will be a stale pointer.
  */
-static struct scsi_cmnd *scsi_end_request(struct scsi_cmnd *cmd, int error,
-					  int bytes, int requeue)
+struct scsi_cmnd *scsi_end_request(struct scsi_cmnd *cmd, int error,
+				   int bytes, int requeue)
 {
 	struct request_queue *q = cmd->device->request_queue;
 	struct request *req = cmd->request;
