@@ -5,6 +5,7 @@
 #include <linux/module.h>
 #include <linux/bio.h>
 #include <linux/blkdev.h>
+#include <linux/blk-mq.h>
 #include <linux/sched/sysctl.h>
 
 #include "blk.h"
@@ -24,7 +25,9 @@ static void blk_end_sync_rq(struct request *rq, int error)
 	struct completion *waiting = rq->end_io_data;
 
 	rq->end_io_data = NULL;
-	__blk_put_request(rq->q, rq);
+	if (!rq->q->mq_ops) {
+		__blk_put_request(rq->q, rq);
+	}
 
 	/*
 	 * complete last, if this is a stack request the process (and thus
@@ -64,6 +67,14 @@ void blk_execute_rq_nowait(struct request_queue *q, struct gendisk *bd_disk,
 	 * be freed before that returns.
 	 */
 	is_pm_resume = rq->cmd_type == REQ_TYPE_PM_RESUME;
+
+//FIXME: Allow at_head = 1 operation
+//FIXME: Check for queue dying + is_pm_resume
+	if (q->mq_ops) {
+		printk("Calling blk_mq_insert_request from blk_execute_rq_nowait >>>>>>>>>>>>>>>>\n");
+		blk_mq_insert_request(q, rq, true);
+		return;
+	}
 
 	spin_lock_irq(q->queue_lock);
 

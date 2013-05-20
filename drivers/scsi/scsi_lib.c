@@ -20,6 +20,7 @@
 #include <linux/delay.h>
 #include <linux/hardirq.h>
 #include <linux/scatterlist.h>
+#include <linux/blk-mq.h>
 
 #include <scsi/scsi.h>
 #include <scsi/scsi_cmnd.h>
@@ -31,7 +32,7 @@
 
 #include "scsi_priv.h"
 #include "scsi_logging.h"
-
+#include "scsi-mq.h"
 
 #define SG_MEMPOOL_NR		ARRAY_SIZE(scsi_sg_pools)
 #define SG_MEMPOOL_SIZE		2
@@ -232,14 +233,41 @@ int scsi_execute(struct scsi_device *sdev, const unsigned char *cmd,
 		 int *resid)
 {
 	struct request *req;
+	struct request_queue *q = sdev->request_queue;
 	int write = (data_direction == DMA_TO_DEVICE);
 	int ret = DRIVER_ERROR << 24;
 
-	req = blk_get_request(sdev->request_queue, write, __GFP_WAIT);
-	if (!req)
-		return ret;
+	if (q->mq_ops) {
+		printk("Entering scsi_execute with q->mq_ops: %p\n", q->mq_ops);
 
-	if (bufflen &&	blk_rq_map_kern(sdev->request_queue, req,
+#if 0
+		struct blk_mq_hw_ctx *hctx;
+		struct blk_mq_ctx *ctx;
+
+		ctx = blk_mq_get_ctx(q);
+		hctx = q->mq_ops->map_queue(q, ctx->cpu);
+
+//FIXME: Fix __blk_mq_alloc_request failure in scsi_execute
+		req = __blk_mq_alloc_request(hctx, GFP_ATOMIC);
+		if (!req)
+			return;
+
+		blk_mq_rq_ctx_init(ctx, req, write);
+		blk_mq_put_ctx(ctx);
+#else
+		req = blk_mq_alloc_request(q, write, __GFP_WAIT);
+		if (!req)
+			return ret;
+
+		printk("Allocated blk-mq req: %p, req->tag: %u\n", req, req->tag);
+#endif
+	} else {
+		req = blk_get_request(sdev->request_queue, write, __GFP_WAIT);
+		if (!req)
+			return ret;
+	}
+
+	if (bufflen &&	blk_rq_map_kern(q, req,
 					buffer, bufflen, __GFP_WAIT))
 		goto out;
 
@@ -270,7 +298,12 @@ int scsi_execute(struct scsi_device *sdev, const unsigned char *cmd,
 		*resid = req->resid_len;
 	ret = req->errors;
  out:
-	blk_put_request(req);
+	if (q->mq_ops) {
+		printk("scsi_execute(): Calling blk_mq_free_request >>>\n");
+		blk_mq_free_request(req);
+	} else {
+		blk_put_request(req);
+	}
 
 	return ret;
 }
