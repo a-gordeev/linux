@@ -1087,9 +1087,10 @@ static int sd_prep_fn(struct request_queue *q, struct request *rq)
 	SCpnt->sdb.length = this_count * sdp->sector_size;
 
 	/* If DIF or DIX is enabled, tell HBA how to handle request */
+#if 0
 	if (host_dif || scsi_prot_sg_count(SCpnt))
 		sd_prot_op(SCpnt, host_dif);
-
+#endif
 	/*
 	 * We shouldn't disconnect in the middle of a sector, so with a dumb
 	 * host adapter, it's safe to assume that we can at least transfer

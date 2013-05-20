@@ -696,7 +696,7 @@ static void __scsi_release_buffers(struct scsi_cmnd *cmd, int do_bidi_check)
 		scsi_free_sgtable(&cmd->sdb);
 
 	memset(&cmd->sdb, 0, sizeof(cmd->sdb));
-
+#if 0
 	if (do_bidi_check && scsi_bidi_cmnd(cmd)) {
 		struct scsi_data_buffer *bidi_sdb =
 			cmd->request->next_rq->special;
@@ -707,6 +707,7 @@ static void __scsi_release_buffers(struct scsi_cmnd *cmd, int do_bidi_check)
 
 	if (scsi_prot_sg_count(cmd))
 		scsi_free_sgtable(cmd->prot_sdb);
+#endif
 }
 
 /*
