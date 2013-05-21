@@ -793,6 +793,7 @@ void scsi_finish_command(struct scsi_cmnd *cmd)
 	struct scsi_target *starget = scsi_target(sdev);
 	struct Scsi_Host *shost = sdev->host;
 	struct scsi_driver *drv;
+	struct request *req = cmd->request;
 	unsigned int good_bytes;
 
 	scsi_device_unbusy(sdev);
@@ -821,8 +822,9 @@ void scsi_finish_command(struct scsi_cmnd *cmd)
 				"(result %x)\n", cmd->result));
 
 	good_bytes = scsi_bufflen(cmd);
-        if (cmd->request->cmd_type != REQ_TYPE_BLOCK_PC) {
+        if (req->cmd_type != REQ_TYPE_BLOCK_PC && req->rq_disk) {
 		int old_good_bytes = good_bytes;
+
 		drv = scsi_cmd_to_driver(cmd);
 		if (drv->done)
 			good_bytes = drv->done(cmd);
