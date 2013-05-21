@@ -854,9 +854,15 @@ void scsi_finish_command(struct scsi_cmnd *cmd)
 	good_bytes = scsi_bufflen(cmd);
         if (cmd->request->cmd_type != REQ_TYPE_BLOCK_PC) {
 		int old_good_bytes = good_bytes;
+//FIXME: Figure out scsi_cmd_to_driver OOPs with SYNCHRONIZE_CACHE cdb
+#if 0
 		drv = scsi_cmd_to_driver(cmd);
-		if (drv->done)
+		if (drv && drv->done)
 			good_bytes = drv->done(cmd);
+		if (!drv) {
+			printk("NULL scsi_driver *drv pointer\n");
+			dump_stack();
+		}
 		/*
 		 * USB may not give sense identifying bad sector and
 		 * simply return a residue instead, so subtract off the
@@ -865,6 +871,7 @@ void scsi_finish_command(struct scsi_cmnd *cmd)
 		 */
 		if (good_bytes == old_good_bytes)
 			good_bytes -= scsi_get_resid(cmd);
+#endif
 	}
 	scsi_io_completion(cmd, good_bytes);
 }
