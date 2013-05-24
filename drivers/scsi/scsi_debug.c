@@ -119,6 +119,7 @@ static const char * scsi_debug_version_date = "20100324";
 #define DEF_VIRTUAL_GB   0
 #define DEF_VPD_USE_HOSTNO 1
 #define DEF_WRITESAME_LENGTH 0xFFFF
+#define DEF_NOP_FS_IO 0
 
 /* bit mask values for scsi_debug_opts */
 #define SCSI_DEBUG_OPT_NOISE   1
@@ -195,6 +196,7 @@ static unsigned int scsi_debug_unmap_max_blocks = DEF_UNMAP_MAX_BLOCKS;
 static unsigned int scsi_debug_unmap_max_desc = DEF_UNMAP_MAX_DESC;
 static unsigned int scsi_debug_write_same_length = DEF_WRITESAME_LENGTH;
 static bool scsi_debug_removable = DEF_REMOVABLE;
+static unsigned int scsi_debug_nop_fs_io = DEF_NOP_FS_IO;
 
 static int scsi_debug_cmnd_count = 0;
 
@@ -2779,6 +2781,8 @@ module_param_named(vpd_use_hostno, scsi_debug_vpd_use_hostno, int,
 		   S_IRUGO | S_IWUSR);
 module_param_named(write_same_length, scsi_debug_write_same_length, int,
 		   S_IRUGO | S_IWUSR);
+module_param_named(nop_fs_io, scsi_debug_nop_fs_io, int,
+		   S_IRUGO | S_IWUSR);
 
 MODULE_AUTHOR("Eric Youngdale + Douglas Gilbert");
 MODULE_DESCRIPTION("SCSI debug adapter driver");
@@ -2820,6 +2824,7 @@ MODULE_PARM_DESC(unmap_max_desc, "max # of ranges that can be unmapped in one cm
 MODULE_PARM_DESC(virtual_gb, "virtual gigabyte size (def=0 -> use dev_size_mb)");
 MODULE_PARM_DESC(vpd_use_hostno, "0 -> dev ids ignore hostno (def=1 -> unique dev ids)");
 MODULE_PARM_DESC(write_same_length, "Maximum blocks per WRITE SAME cmd (def=0xffff)");
+MODULE_PARM_DESC(nop_fs_io, "Turn REQ_TYPE_FS I/O into NOPs");
 
 static char sdebug_info[256];
 
@@ -3954,6 +3959,20 @@ write:
 
 static DEF_SCSI_QCMD(scsi_debug_queuecommand)
 
+static int scsi_debug_queuecommand_mq(struct Scsi_Host *host, struct scsi_cmnd *sc)
+{
+	struct request *rq = sc->request;
+
+	if (scsi_debug_nop_fs_io && rq->cmd_type == REQ_TYPE_FS) {
+		set_host_byte(sc, DID_OK);
+		sc->result |= SAM_STAT_GOOD;
+		sc->scsi_done(sc);
+		return 0;
+	}
+
+	return scsi_debug_queuecommand_lck(sc, sc->scsi_done);
+}
+
 static struct scsi_host_template sdebug_driver_template = {
 	.show_info =		scsi_debug_show_info,
 	.write_info =		scsi_debug_write_info,
@@ -3965,6 +3984,8 @@ static struct scsi_host_template sdebug_driver_template = {
 	.slave_destroy =	scsi_debug_slave_destroy,
 	.ioctl =		scsi_debug_ioctl,
 	.queuecommand =		scsi_debug_queuecommand,
+	.queuecommand_mq =	scsi_debug_queuecommand_mq,
+	.scsi_mq =		true,
 	.eh_abort_handler =	scsi_debug_abort,
 	.eh_bus_reset_handler = scsi_debug_bus_reset,
 	.eh_device_reset_handler = scsi_debug_device_reset,
@@ -3973,7 +3994,7 @@ static struct scsi_host_template sdebug_driver_template = {
 	.can_queue =		SCSI_DEBUG_CANQUEUE,
 	.this_id =		7,
 	.sg_tablesize =		256,
-	.cmd_per_lun =		16,
+	.cmd_per_lun =		64,
 	.max_sectors =		0xffff,
 	.use_clustering = 	DISABLE_CLUSTERING,
 	.module =		THIS_MODULE,
