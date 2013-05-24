@@ -158,9 +158,22 @@ static inline int irq_domain_associate(struct irq_domain *domain, unsigned int i
 	return irq_domain_associate_many(domain, irq, hwirq, 1);
 }
 
-extern unsigned int irq_create_mapping(struct irq_domain *host,
-				       irq_hw_number_t hwirq);
-extern void irq_dispose_mapping(unsigned int virq);
+extern unsigned int irq_create_mappings(struct irq_domain *host,
+					irq_hw_number_t hwirq_base, int count);
+
+static inline unsigned int irq_create_mapping(struct irq_domain *host,
+					      irq_hw_number_t hwirq)
+{
+	return irq_create_mappings(host, hwirq, 1);
+}
+
+extern void irq_dispose_mappings(unsigned int virq_base, int count);
+
+static inline void irq_dispose_mapping(unsigned int virq)
+{
+	return irq_dispose_mappings(virq, 1);
+}
+
 extern unsigned int irq_find_mapping(struct irq_domain *host,
 				     irq_hw_number_t hwirq);
 extern unsigned int irq_create_direct_mapping(struct irq_domain *host);
