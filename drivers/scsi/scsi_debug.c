@@ -3947,6 +3947,20 @@ write:
 
 static DEF_SCSI_QCMD(scsi_debug_queuecommand)
 
+static int scsi_debug_queuecommand_mq(struct Scsi_Host *host, struct scsi_cmnd *sc)
+{
+	struct request *rq = sc->request;
+#if 1
+	if (rq->cmd_type == REQ_TYPE_FS) {
+		set_host_byte(sc, DID_OK);
+		sc->result |= SAM_STAT_GOOD;
+		sc->scsi_done(sc);
+		return 0;
+	}
+#endif
+	return scsi_debug_queuecommand_lck(sc, sc->scsi_done);
+}
+
 static struct scsi_host_template sdebug_driver_template = {
 	.show_info =		scsi_debug_show_info,
 	.write_info =		scsi_debug_write_info,
@@ -3958,6 +3972,8 @@ static struct scsi_host_template sdebug_driver_template = {
 	.slave_destroy =	scsi_debug_slave_destroy,
 	.ioctl =		scsi_debug_ioctl,
 	.queuecommand =		scsi_debug_queuecommand,
+	.queuecommand_mq =	scsi_debug_queuecommand_mq,
+	.scsi_mq =		true,
 	.eh_abort_handler =	scsi_debug_abort,
 	.eh_bus_reset_handler = scsi_debug_bus_reset,
 	.eh_device_reset_handler = scsi_debug_device_reset,
@@ -4024,9 +4040,9 @@ static int sdebug_driver_probe(struct device * dev)
 			host_prot |= SHOST_DIX_TYPE0_PROTECTION;
 		break;
 	}
-
+#if 0
 	scsi_host_set_prot(hpnt, host_prot);
-
+#endif
 	printk(KERN_INFO "scsi_debug: host protection%s%s%s%s%s%s%s\n",
 	       (host_prot & SHOST_DIF_TYPE1_PROTECTION) ? " DIF1" : "",
 	       (host_prot & SHOST_DIF_TYPE2_PROTECTION) ? " DIF2" : "",
@@ -4035,12 +4051,12 @@ static int sdebug_driver_probe(struct device * dev)
 	       (host_prot & SHOST_DIX_TYPE1_PROTECTION) ? " DIX1" : "",
 	       (host_prot & SHOST_DIX_TYPE2_PROTECTION) ? " DIX2" : "",
 	       (host_prot & SHOST_DIX_TYPE3_PROTECTION) ? " DIX3" : "");
-
+#if 0
 	if (scsi_debug_guard == 1)
 		scsi_host_set_guard(hpnt, SHOST_DIX_GUARD_IP);
 	else
 		scsi_host_set_guard(hpnt, SHOST_DIX_GUARD_CRC);
-
+#endif
         error = scsi_add_host(hpnt, &sdbg_host->dev);
         if (error) {
                 printk(KERN_ERR "%s: scsi_add_host failed\n", __func__);
