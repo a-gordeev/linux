@@ -56,6 +56,10 @@ static int tcm_loop_queue_status(struct se_cmd *se_cmd);
  */
 static int tcm_loop_check_stop_free(struct se_cmd *se_cmd)
 {
+	struct tcm_loop_cmd *tl_cmd = container_of(se_cmd,
+			struct tcm_loop_cmd, tl_se_cmd);
+	struct scsi_cmnd *sc = tl_cmd->sc;
+
 	/*
 	 * Do not release struct se_cmd's containing a valid TMR
 	 * pointer.  These will be released directly in tcm_loop_device_reset()
@@ -68,6 +72,8 @@ static int tcm_loop_check_stop_free(struct se_cmd *se_cmd)
 	 * struct tcm_loop_cmd * in tcm_loop_deallocate_core_cmd()
 	 */
 	transport_generic_free_cmd(se_cmd, 0);
+	sc->scsi_done(sc);
+
 	return 1;
 }
 
@@ -75,8 +81,9 @@ static void tcm_loop_release_cmd(struct se_cmd *se_cmd)
 {
 	struct tcm_loop_cmd *tl_cmd = container_of(se_cmd,
 				struct tcm_loop_cmd, tl_se_cmd);
-
+#if 0
 	kmem_cache_free(tcm_loop_cmd_cache, tl_cmd);
+#endif
 }
 
 static int tcm_loop_show_info(struct seq_file *m, struct Scsi_Host *host)
@@ -224,6 +231,13 @@ static int tcm_loop_queuecommand(struct Scsi_Host *sh, struct scsi_cmnd *sc)
 		sc->device->id, sc->device->channel, sc->device->lun,
 		sc->cmnd[0], scsi_bufflen(sc));
 
+	if (sc->request->cmd_type == REQ_TYPE_FS) {
+		set_host_byte(sc, DID_OK);
+		sc->result = SAM_STAT_GOOD;
+		sc->scsi_done(sc);
+		return 0;
+	}
+
 	tl_cmd = kmem_cache_zalloc(tcm_loop_cmd_cache, GFP_ATOMIC);
 	if (!tl_cmd) {
 		pr_err("Unable to allocate struct tcm_loop_cmd\n");
@@ -233,6 +247,29 @@ static int tcm_loop_queuecommand(struct Scsi_Host *sh, struct scsi_cmnd *sc)
 	}
 
 	tl_cmd->sc = sc;
+	INIT_WORK(&tl_cmd->work, tcm_loop_submission_work);
+	queue_work(tcm_loop_workqueue, &tl_cmd->work);
+	return 0;
+}
+
+static int tcm_loop_queuecommand_mq(struct Scsi_Host *sh, struct scsi_cmnd *sc)
+{
+	struct tcm_loop_cmd *tl_cmd = (struct tcm_loop_cmd *)sc->SCp.ptr;
+
+	memset(tl_cmd, 0, sizeof(struct tcm_loop_cmd));
+	tl_cmd->sc = sc;
+#if 0
+	printk("tcm_loop_queuecommand_mq: tl_cmd: %p sc->SCp.ptr: %p\n",
+		tl_cmd, sc->SCp.ptr);
+#endif
+#if 1
+	if (sc->request->cmd_type == REQ_TYPE_FS) {
+		set_host_byte(sc, DID_OK);
+		sc->result = SAM_STAT_GOOD;
+		sc->scsi_done(sc);
+		return 0;
+	}
+#endif
 	INIT_WORK(&tl_cmd->work, tcm_loop_submission_work);
 	queue_work(tcm_loop_workqueue, &tl_cmd->work);
 	return 0;
@@ -339,6 +376,9 @@ static struct scsi_host_template tcm_loop_driver_template = {
 	.proc_name		= "tcm_loopback",
 	.name			= "TCM_Loopback",
 	.queuecommand		= tcm_loop_queuecommand,
+	.queuecommand_mq	= tcm_loop_queuecommand_mq,
+	.scsi_mq		= true,
+	.cmd_size		= sizeof(struct tcm_loop_cmd),
 	.change_queue_depth	= tcm_loop_change_queue_depth,
 	.eh_device_reset_handler = tcm_loop_device_reset,
 	.can_queue		= 1024,
@@ -754,7 +794,7 @@ static int tcm_loop_queue_data_in(struct se_cmd *se_cmd)
 	if ((se_cmd->se_cmd_flags & SCF_OVERFLOW_BIT) ||
 	    (se_cmd->se_cmd_flags & SCF_UNDERFLOW_BIT))
 		scsi_set_resid(sc, se_cmd->residual_count);
-	sc->scsi_done(sc);
+//	sc->scsi_done(sc);
 	return 0;
 }
 
@@ -782,7 +822,7 @@ static int tcm_loop_queue_status(struct se_cmd *se_cmd)
 	if ((se_cmd->se_cmd_flags & SCF_OVERFLOW_BIT) ||
 	    (se_cmd->se_cmd_flags & SCF_UNDERFLOW_BIT))
 		scsi_set_resid(sc, se_cmd->residual_count);
-	sc->scsi_done(sc);
+//	sc->scsi_done(sc);
 	return 0;
 }
 
