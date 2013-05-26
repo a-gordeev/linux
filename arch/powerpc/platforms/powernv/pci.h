@@ -81,8 +81,9 @@ struct pnv_phb {
 	struct msi_bitmap	msi_bmp;
 #endif
 	int (*msi_setup)(struct pnv_phb *phb, struct pci_dev *dev,
-			 unsigned int hwirq, unsigned int virq,
-			 unsigned int is_64, struct msi_msg *msg);
+			 unsigned int hwirq_base, unsigned int nvec,
+			 unsigned int virq_base, unsigned int is_64,
+			 struct msi_msg *msg);
 	void (*dma_dev_setup)(struct pnv_phb *phb, struct pci_dev *pdev);
 	void (*fixup_phb)(struct pci_controller *hose);
 	u32 (*bdfn_to_pe)(struct pnv_phb *phb, struct pci_bus *bus, u32 devfn);

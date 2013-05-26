@@ -764,16 +764,17 @@ static void pnv_ioda2_msi_eoi(struct irq_data *d)
 }
 
 static int pnv_pci_ioda_msi_setup(struct pnv_phb *phb, struct pci_dev *dev,
-				  unsigned int hwirq, unsigned int virq,
-				  unsigned int is_64, struct msi_msg *msg)
+				  unsigned int hwirq_base, unsigned int nvec,
+				  unsigned int virq_base, unsigned int is_64,
+				  struct msi_msg *msg)
 {
 	struct pnv_ioda_pe *pe = pnv_ioda_get_pe(dev);
 	struct irq_data *idata;
 	struct irq_chip *ichip;
-	unsigned int xive_num = hwirq - phb->msi_base;
+	unsigned int xive_num = hwirq_base - phb->msi_base;
 	uint64_t addr64;
 	uint32_t addr32, data;
-	int rc;
+	int i, rc;
 
 	/* No PE assigned ? bail out ... no MSI for you ! */
 	if (pe == NULL)
@@ -792,8 +793,8 @@ static int pnv_pci_ioda_msi_setup(struct pnv_phb *phb, struct pci_dev *dev,
 	}
 
 	if (is_64) {
-		rc = opal_get_msi_64(phb->opal_id, pe->mve_number, xive_num, 1,
-				     &addr64, &data);
+		rc = opal_get_msi_64(phb->opal_id, pe->mve_number, xive_num,
+				     nvec, &addr64, &data);
 		if (rc) {
 			pr_warn("%s: OPAL error %d getting 64-bit MSI data\n",
 				pci_name(dev), rc);
@@ -802,8 +803,8 @@ static int pnv_pci_ioda_msi_setup(struct pnv_phb *phb, struct pci_dev *dev,
 		msg->address_hi = addr64 >> 32;
 		msg->address_lo = addr64 & 0xfffffffful;
 	} else {
-		rc = opal_get_msi_32(phb->opal_id, pe->mve_number, xive_num, 1,
-				     &addr32, &data);
+		rc = opal_get_msi_32(phb->opal_id, pe->mve_number, xive_num,
+				     nvec, &addr32, &data);
 		if (rc) {
 			pr_warn("%s: OPAL error %d getting 32-bit MSI data\n",
 				pci_name(dev), rc);
@@ -821,19 +822,20 @@ static int pnv_pci_ioda_msi_setup(struct pnv_phb *phb, struct pci_dev *dev,
 	 */
 	if (phb->type == PNV_PHB_IODA2) {
 		if (!phb->ioda.irq_chip_init) {
-			idata = irq_get_irq_data(virq);
+			idata = irq_get_irq_data(virq_base);
 			ichip = irq_data_get_irq_chip(idata);
 			phb->ioda.irq_chip_init = 1;
 			phb->ioda.irq_chip = *ichip;
 			phb->ioda.irq_chip.irq_eoi = pnv_ioda2_msi_eoi;
 		}
 
-		irq_set_chip(virq, &phb->ioda.irq_chip);
+		for (i = 0; i < nvec; i++)
+			irq_set_chip(virq_base + i, &phb->ioda.irq_chip);
 	}
 
-	pr_devel("%s: %s-bit MSI on hwirq %x (xive #%d),"
+	pr_devel("%s: %s-bit MSI on hwirq_base %x (xive #%d) nvec %d,"
 		 " address=%x_%08x data=%x PE# %d\n",
-		 pci_name(dev), is_64 ? "64" : "32", hwirq, xive_num,
+		 pci_name(dev), is_64 ? "64" : "32", hwirq_base, xive_num, nvec,
 		 msg->address_hi, msg->address_lo, data, pe->pe_number);
 
 	return 0;
