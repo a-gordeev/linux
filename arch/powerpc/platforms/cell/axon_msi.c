@@ -204,6 +204,9 @@ static int axon_msi_check_device(struct pci_dev *dev, int nvec, int type)
 	if (!find_msi_translator(dev))
 		return -ENODEV;
 
+	if (type == PCI_CAP_ID_MSI && nvec > 1)
+		return 1;
+
 	return 0;
 }
 

@@ -140,6 +140,8 @@ static int ppc4xx_msi_check_device(struct pci_dev *pdev, int nvec, int type)
 		__func__, nvec, type);
 	if (type == PCI_CAP_ID_MSIX)
 		pr_debug("ppc4xx msi: MSI-X untested, trying anyway.\n");
+	else if (nvec > 1)
+		return 1;
 
 	return 0;
 }

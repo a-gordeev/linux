@@ -365,6 +365,9 @@ static int rtas_msi_check_device(struct pci_dev *pdev, int nvec, int type)
 	if (rc)
 		return rc;
 
+	if (type == PCI_CAP_ID_MSI && nvec > 1)
+		return 1;
+
 	quota = msi_quota_for_device(pdev, nvec);
 
 	if (quota && quota < nvec)

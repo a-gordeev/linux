@@ -100,6 +100,8 @@ static int fsl_msi_check_device(struct pci_dev *pdev, int nvec, int type)
 {
 	if (type == PCI_CAP_ID_MSIX)
 		pr_debug("fslmsi: MSI-X untested, trying anyway.\n");
+	else if (nvec > 1)
+		return 1;
 
 	return 0;
 }
