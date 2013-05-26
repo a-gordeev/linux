@@ -48,7 +48,13 @@ static int pnv_msi_check_device(struct pci_dev* pdev, int nvec, int type)
 	struct pci_controller *hose = pci_bus_to_host(pdev->bus);
 	struct pnv_phb *phb = hose->private_data;
 
-	return (phb && phb->msi_bmp.bitmap) ? 0 : -ENODEV;
+	if (!(phb && phb->msi_bmp.bitmap))
+		return -ENODEV;
+
+	if (type == PCI_CAP_ID_MSI && nvec > 1)
+		return 1;
+
+	return 0;
 }
 
 static int pnv_setup_msi_irqs(struct pci_dev *pdev, int nvec, int type)

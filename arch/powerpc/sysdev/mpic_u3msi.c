@@ -109,6 +109,8 @@ static int u3msi_msi_check_device(struct pci_dev *pdev, int nvec, int type)
 {
 	if (type == PCI_CAP_ID_MSIX)
 		pr_debug("u3msi: MSI-X untested, trying anyway.\n");
+	else if (nvec > 1)
+		return 1;
 
 	/* If we can't find a magic address then MSI ain't gonna work */
 	if (find_ht_magic_addr(pdev, 0) == 0 &&

@@ -21,6 +21,12 @@
 #define MSI_ADDR_32		0xFFFF0000ul
 #define MSI_ADDR_64		0x1000000000000000ul
 
+int wsp_msi_check_device(struct pci_dev *dev, int nvec, int type)
+{
+	if (type == PCI_CAP_ID_MSI && nvec > 1)
+		return 1;
+}
+
 int wsp_setup_msi_irqs(struct pci_dev *dev, int nvec, int type)
 {
 	struct pci_controller *phb;
@@ -97,6 +103,7 @@ void wsp_setup_phb_msi(struct pci_controller *phb)
 	out_be64(phb->cfg_data + PCIE_REG_IODA_ADDR, PCIE_REG_IODA_AD_TBL_MVT);
 	out_be64(phb->cfg_data + PCIE_REG_IODA_DATA0, 1ull << 63);
 
+	ppc_md.msi_check_device = wsp_msi_check_device;
 	ppc_md.setup_msi_irqs = wsp_setup_msi_irqs;
 	ppc_md.teardown_msi_irqs = wsp_teardown_msi_irqs;
 }

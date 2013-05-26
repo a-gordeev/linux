@@ -357,6 +357,9 @@ static int rtas_msi_check_device(struct pci_dev *pdev, int nvec, int type)
 {
 	int quota, rc;
 
+	if (type == PCI_CAP_ID_MSI && nvec > 1)
+		return 1;
+
 	/*
 	 * Firmware currently refuses any non power of two allocation
 	 * so we round up if the quota will allow it.
