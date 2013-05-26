@@ -42,12 +42,13 @@
 
 #ifdef CONFIG_PCI_MSI
 static int pnv_pci_p5ioc2_msi_setup(struct pnv_phb *phb, struct pci_dev *dev,
-				    unsigned int hwirq, unsigned int virq,
-				    unsigned int is_64, struct msi_msg *msg)
+				    unsigned int hwirq_base, unsigned int nvec,
+				    unsigned int virq_base, unsigned int is_64,
+				    struct msi_msg *msg)
 {
 	if (WARN_ON(!is_64))
 		return -ENXIO;
-	msg->data = hwirq - phb->msi_base;
+	msg->data = hwirq_base - phb->msi_base;
 	msg->address_hi = 0x10000000;
 	msg->address_lo = 0;
 

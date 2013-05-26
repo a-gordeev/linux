@@ -51,13 +51,61 @@ static int pnv_msi_check_device(struct pci_dev* pdev, int nvec, int type)
 	if (!(phb && phb->msi_bmp.bitmap))
 		return -ENODEV;
 
-	if (type == PCI_CAP_ID_MSI && nvec > 1)
-		return 1;
+	return 0;
+}
+
+static int do_pnv_setup_msi_irqs(struct pci_dev *pdev, int nvec)
+{
+	struct pci_controller *hose = pci_bus_to_host(pdev->bus);
+	struct pnv_phb *phb = hose->private_data;
+	struct msi_desc *entry;
+	struct msi_msg msg;
+	int hwirq_base;
+	unsigned int virq_base;
+	int i, rc;
+
+	if (WARN_ON(!phb))
+		return -ENODEV;
+
+	entry = list_entry(pdev->msi_list.next, struct msi_desc, list);
+	if (!entry->msi_attrib.is_64 && !phb->msi32_support) {
+		pr_warn("%s: Supports only 64-bit MSIs\n", pci_name(pdev));
+		return -ENXIO;
+	}
+
+	nvec = roundup_pow_of_two(nvec);
+
+	hwirq_base = msi_bitmap_alloc_hwirqs(&phb->msi_bmp, nvec);
+	if (hwirq_base < 0) {
+		pr_warn("%s: Failed to find a free MSI\n", pci_name(pdev));
+		return -ENOSPC;
+	}
+
+	virq_base = irq_create_mappings(NULL, phb->msi_base + hwirq_base, nvec);
+	if (virq_base == NO_IRQ) {
+		pr_warn("%s: Failed to map MSI to linux irq\n", pci_name(pdev));
+		msi_bitmap_free_hwirqs(&phb->msi_bmp, hwirq_base, nvec);
+		return -ENOMEM;
+	}
+
+	rc = phb->msi_setup(phb, pdev, phb->msi_base + hwirq_base, nvec,
+			    virq_base, entry->msi_attrib.is_64, &msg);
+	if (rc) {
+		pr_warn("%s: Failed to setup MSI\n", pci_name(pdev));
+		irq_dispose_mappings(virq_base, nvec);
+		msi_bitmap_free_hwirqs(&phb->msi_bmp, hwirq_base, nvec);
+		return rc;
+	}
+
+	entry->msi_attrib.multiple = ilog2(nvec);
+	for (i = 0; i < nvec; i++)
+		irq_set_msi_desc_off(virq_base, i, entry);
+	write_msi_msg(virq_base, &msg);
 
 	return 0;
 }
 
-static int pnv_setup_msi_irqs(struct pci_dev *pdev, int nvec, int type)
+static int do_pnv_setup_msix_irqs(struct pci_dev *pdev, int nvec)
 {
 	struct pci_controller *hose = pci_bus_to_host(pdev->bus);
 	struct pnv_phb *phb = hose->private_data;
@@ -72,27 +120,27 @@ static int pnv_setup_msi_irqs(struct pci_dev *pdev, int nvec, int type)
 
 	list_for_each_entry(entry, &pdev->msi_list, list) {
 		if (!entry->msi_attrib.is_64 && !phb->msi32_support) {
-			pr_warn("%s: Supports only 64-bit MSIs\n",
+			pr_warn("%s: Supports only 64-bit MSI-Xs\n",
 				pci_name(pdev));
 			return -ENXIO;
 		}
 		hwirq = msi_bitmap_alloc_hwirqs(&phb->msi_bmp, 1);
 		if (hwirq < 0) {
-			pr_warn("%s: Failed to find a free MSI\n",
+			pr_warn("%s: Failed to find a free MSI-X\n",
 				pci_name(pdev));
 			return -ENOSPC;
 		}
 		virq = irq_create_mapping(NULL, phb->msi_base + hwirq);
 		if (virq == NO_IRQ) {
-			pr_warn("%s: Failed to map MSI to linux irq\n",
+			pr_warn("%s: Failed to map MSI-X to linux irq\n",
 				pci_name(pdev));
 			msi_bitmap_free_hwirqs(&phb->msi_bmp, hwirq, 1);
 			return -ENOMEM;
 		}
-		rc = phb->msi_setup(phb, pdev, phb->msi_base + hwirq,
+		rc = phb->msi_setup(phb, pdev, phb->msi_base + hwirq, 1,
 				    virq, entry->msi_attrib.is_64, &msg);
 		if (rc) {
-			pr_warn("%s: Failed to setup MSI\n", pci_name(pdev));
+			pr_warn("%s: Failed to setup MSI-X\n", pci_name(pdev));
 			irq_dispose_mapping(virq);
 			msi_bitmap_free_hwirqs(&phb->msi_bmp, hwirq, 1);
 			return rc;
@@ -103,11 +151,20 @@ static int pnv_setup_msi_irqs(struct pci_dev *pdev, int nvec, int type)
 	return 0;
 }
 
+static int pnv_setup_msi_irqs(struct pci_dev *pdev, int nvec, int type)
+{
+	if (type == PCI_CAP_ID_MSI)
+		return do_pnv_setup_msi_irqs(pdev, nvec);
+	else
+		return do_pnv_setup_msix_irqs(pdev, nvec);
+}
+
 static void pnv_teardown_msi_irqs(struct pci_dev *pdev)
 {
 	struct pci_controller *hose = pci_bus_to_host(pdev->bus);
 	struct pnv_phb *phb = hose->private_data;
 	struct msi_desc *entry;
+	int i, nvec;
 
 	if (WARN_ON(!phb))
 		return;
@@ -115,10 +172,14 @@ static void pnv_teardown_msi_irqs(struct pci_dev *pdev)
 	list_for_each_entry(entry, &pdev->msi_list, list) {
 		if (entry->irq == NO_IRQ)
 			continue;
-		irq_set_msi_desc(entry->irq, NULL);
+
+		nvec = 1 << entry->msi_attrib.multiple;
+		for (i = 0; i < nvec; i++)
+			irq_set_msi_desc_off(entry->irq, i, NULL);
 		msi_bitmap_free_hwirqs(&phb->msi_bmp,
-			virq_to_hw(entry->irq) - phb->msi_base, 1);
-		irq_dispose_mapping(entry->irq);
+				       virq_to_hw(entry->irq) - phb->msi_base,
+				       nvec);
+		irq_dispose_mappings(entry->irq, nvec);
 	}
 }
 #endif /* CONFIG_PCI_MSI */
