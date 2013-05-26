@@ -146,6 +146,9 @@ static int u3msi_setup_msi_irqs(struct pci_dev *pdev, int nvec, int type)
 	u64 addr;
 	int hwirq;
 
+	if (type == PCI_CAP_ID_MSI && nvec > 1)
+		return 1;
+
 	list_for_each_entry(entry, &pdev->msi_list, list) {
 		hwirq = msi_bitmap_alloc_hwirqs(&msi_mpic->msi_bitmap, 1);
 		if (hwirq < 0) {

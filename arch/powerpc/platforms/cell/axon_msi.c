@@ -268,6 +268,9 @@ static int axon_msi_setup_msi_irqs(struct pci_dev *dev, int nvec, int type)
 	struct msi_msg msg;
 	struct axon_msic *msic;
 
+	if (type == PCI_CAP_ID_MSI && nvec > 1)
+		return 1;
+
 	msic = find_msi_translator(dev);
 	if (!msic)
 		return -ENODEV;

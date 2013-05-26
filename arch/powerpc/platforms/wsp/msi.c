@@ -29,6 +29,9 @@ int wsp_setup_msi_irqs(struct pci_dev *dev, int nvec, int type)
 	unsigned int virq;
 	int hwirq;
 
+	if (type == PCI_CAP_ID_MSI && nvec > 1)
+		return 1;
+
 	phb = pci_bus_to_host(dev->bus);
 	if (!phb)
 		return -ENOENT;

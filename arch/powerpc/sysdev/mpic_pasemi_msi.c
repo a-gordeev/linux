@@ -100,6 +100,9 @@ static int pasemi_msi_setup_msi_irqs(struct pci_dev *pdev, int nvec, int type)
 	pr_debug("pasemi_msi_setup_msi_irqs, pdev %p nvec %d type %d\n",
 		 pdev, nvec, type);
 
+	if (type == PCI_CAP_ID_MSI && nvec > 1)
+		return 1;
+
 	msg.address_hi = 0;
 	msg.address_lo = PASEMI_MSI_ADDR;
 

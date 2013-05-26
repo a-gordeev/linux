@@ -159,6 +159,9 @@ static int fsl_setup_msi_irqs(struct pci_dev *pdev, int nvec, int type)
 	struct msi_msg msg;
 	struct fsl_msi *msi_data;
 
+	if (type == PCI_CAP_ID_MSI && nvec > 1)
+		return 1;
+
 	/*
 	 * If the PCI node has an fsl,msi property, then we need to use it
 	 * to find the specific MSI.

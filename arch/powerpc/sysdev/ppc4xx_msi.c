@@ -85,6 +85,9 @@ static int ppc4xx_setup_msi_irqs(struct pci_dev *dev, int nvec, int type)
 	struct msi_desc *entry;
 	struct ppc4xx_msi *msi_data = &ppc4xx_msi;
 
+	if (type == PCI_CAP_ID_MSI && nvec > 1)
+		return 1;
+
 	msi_data->msi_virqs = kmalloc((msi_irqs) * sizeof(int),
 					    GFP_KERNEL);
 	if (!msi_data->msi_virqs)
