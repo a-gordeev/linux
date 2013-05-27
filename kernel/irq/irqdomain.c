@@ -549,68 +549,82 @@ unsigned int irq_create_direct_mapping(struct irq_domain *domain)
 EXPORT_SYMBOL_GPL(irq_create_direct_mapping);
 
 /**
- * irq_create_mapping() - Map a hardware interrupt into linux irq space
+ * irq_create_mappings() - Map hardware interrupts into linux irq space
  * @domain: domain owning this hardware interrupt or NULL for default domain
- * @hwirq: hardware irq number in that domain space
+ * @hwirq_base: beginning of hardware interrupts range in that domain space
+ * @count: number of interrupts in the range to map
  *
- * Only one mapping per hardware interrupt is permitted. Returns a linux
- * irq number.
+ * Only one mapping per hardware interrupt is permitted. Returns a linux irq
+ * base number for a contiguous range of hardware interrupts mapped to linux
+ * irq space.
  * If the sense/trigger is to be specified, set_irq_type() should be called
  * on the number returned from that call.
  */
-unsigned int irq_create_mapping(struct irq_domain *domain,
-				irq_hw_number_t hwirq)
+unsigned int irq_create_mappings(struct irq_domain *domain,
+				 irq_hw_number_t hwirq_base, int count)
 {
-	unsigned int hint;
-	int virq;
+	unsigned int hint, i;
+	int virq_base;
 
-	pr_debug("irq_create_mapping(0x%p, 0x%lx)\n", domain, hwirq);
+	pr_debug("irq_create_mappings(0x%p, 0x%lx, %d)\n",
+		 domain, hwirq_base, count);
 
 	/* Look for default domain if nececssary */
 	if (domain == NULL)
 		domain = irq_default_domain;
 	if (domain == NULL) {
-		pr_warning("irq_create_mapping called for"
-			   " NULL domain, hwirq=%lx\n", hwirq);
+		pr_warning("irq_create_mappings called for"
+			   " NULL domain, hwirq_base=%lx, count=%d\n",
+			   hwirq_base, count);
 		WARN_ON(1);
 		return 0;
 	}
 	pr_debug("-> using domain @%p\n", domain);
 
-	/* Check if mapping already exists */
-	virq = irq_find_mapping(domain, hwirq);
-	if (virq) {
-		pr_warning("-> existing mapping on virq %d\n", virq);
-		return 0;
+	for (i = 0; i < count; i++) {
+		unsigned int virq = irq_find_mapping(domain, hwirq_base + i);
+
+		if (virq) {
+			pr_err("-> existing mapping on virq %d\n", virq);
+			return 0;
+		}
 	}
 
-	/* Get a virtual interrupt number */
+	/*
+	 * Get a virtual interrupt number. The legacy map assumes direct
+	 * mapping between contiguous ranges of hardware and linux IRQ
+	 * numbers, so it is okay to return the linux IRQ base here.
+	 */
 	if (domain->revmap_type == IRQ_DOMAIN_MAP_LEGACY)
-		return irq_domain_legacy_revmap(domain, hwirq);
+		return irq_domain_legacy_revmap(domain, hwirq_base);
 
 	/* Allocate a virtual interrupt number */
-	hint = hwirq % nr_irqs;
+	hint = hwirq_base % nr_irqs;
 	if (hint == 0)
 		hint++;
-	virq = irq_alloc_desc_from(hint, of_node_to_nid(domain->of_node));
-	if (virq <= 0)
-		virq = irq_alloc_desc_from(1, of_node_to_nid(domain->of_node));
-	if (virq <= 0) {
+	virq_base = irq_alloc_descs_from(hint, count,
+					 of_node_to_nid(domain->of_node));
+	if (virq_base <= 0)
+		virq_base = irq_alloc_descs_from(1, count, of_node_to_nid(
+						 domain->of_node));
+	if (virq_base <= 0) {
 		pr_debug("-> virq allocation failed\n");
 		return 0;
 	}
 
-	if (irq_domain_associate(domain, virq, hwirq)) {
-		irq_free_desc(virq);
+	if (irq_domain_associate_many(domain, virq_base, hwirq_base, count)) {
+		irq_free_descs(virq_base, count);
 		return 0;
 	}
 
-	pr_debug("irq %lu on domain %s mapped to virtual irq %u\n",
-		hwirq, of_node_full_name(domain->of_node), virq);
+	pr_debug("irqs %lu-%lu on domain %s mapped to virtual irqs %u-%u\n",
+		 hwirq_base, hwirq_base + count,
+		 of_node_full_name(domain->of_node),
+		 virq_base, virq_base + count);
 
-	return virq;
+	return virq_base;
 }
-EXPORT_SYMBOL_GPL(irq_create_mapping);
+EXPORT_SYMBOL_GPL(irq_create_mappings);
 
 /**
  * irq_create_strict_mappings() - Map a range of hw irqs to fixed linux irqs
@@ -700,15 +714,16 @@ unsigned int irq_create_of_mapping(struct device_node *controller,
 EXPORT_SYMBOL_GPL(irq_create_of_mapping);
 
 /**
- * irq_dispose_mapping() - Unmap an interrupt
- * @virq: linux irq number of the interrupt to unmap
+ * irq_dispose_mappings() - Unmap interrupts
+ * @virq_base: base number of linux interrupts range to unmap
+ * @count: number of interrupts to unmap
  */
-void irq_dispose_mapping(unsigned int virq)
+void irq_dispose_mappings(unsigned int virq_base, int count)
 {
-	struct irq_data *irq_data = irq_get_irq_data(virq);
+	struct irq_data *irq_data = irq_get_irq_data(virq_base);
 	struct irq_domain *domain;
 
-	if (!virq || !irq_data)
+	if (!virq_base || !irq_data)
 		return;
 
 	domain = irq_data->domain;
@@ -719,10 +734,10 @@ void irq_dispose_mapping(unsigned int virq)
 	if (domain->revmap_type == IRQ_DOMAIN_MAP_LEGACY)
 		return;
 
-	irq_domain_disassociate_many(domain, virq, 1);
-	irq_free_desc(virq);
+	irq_domain_disassociate_many(domain, virq_base, count);
+	irq_free_descs(virq_base, count);
 }
-EXPORT_SYMBOL_GPL(irq_dispose_mapping);
+EXPORT_SYMBOL_GPL(irq_dispose_mappings);
 
 /**
  * irq_find_mapping() - Find a linux irq from an hw irq number.
