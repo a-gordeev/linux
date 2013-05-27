@@ -182,6 +182,7 @@ static void ppc47x_pci_irq_fixup(struct pci_dev *dev)
 	if (dev->vendor == 0x1033 && (dev->device == 0x0035 ||
 	                              dev->device == 0x00e0)) {
 		dev->irq = irq_create_mapping(NULL, 47);
+		BUG_ON(dev->irq == NO_IRQ);
 		pr_info("%s: Mapping irq 47 %d\n", __func__, dev->irq);
 	}
 }

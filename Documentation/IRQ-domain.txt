@@ -47,10 +47,9 @@ the .map callback populated as a minimum.
 In most cases, the irq_domain will begin empty without any mappings
 between hwirq and IRQ numbers.  Mappings are added to the irq_domain
 by calling irq_create_mapping() which accepts the irq_domain and a
-hwirq number as arguments.  If a mapping for the hwirq doesn't already
-exist then it will allocate a new Linux irq_desc, associate it with
-the hwirq, and call the .map() callback so the driver can perform any
-required hardware setup.
+hwirq number as arguments. It will allocate a new Linux irq_desc,
+associate it with the hwirq, and call the .map() callback so the
+driver can perform any required hardware setup.
 
 When an interrupt is received, irq_find_mapping() function should
 be used to find the Linux IRQ number from the hwirq number.

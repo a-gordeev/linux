@@ -212,6 +212,7 @@ void *pasemi_dma_alloc_chan(enum pasemi_dmachan_type type,
 		break;
 	}
 
+	BUG_ON(chan->irq == NO_IRQ);
 	chan->chan_type = type;
 
 	return chan;

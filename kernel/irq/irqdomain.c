@@ -580,8 +580,8 @@ unsigned int irq_create_mapping(struct irq_domain *domain,
 	/* Check if mapping already exists */
 	virq = irq_find_mapping(domain, hwirq);
 	if (virq) {
-		pr_debug("-> existing mapping on virq %d\n", virq);
-		return virq;
+		pr_warning("-> existing mapping on virq %d\n", virq);
+		return 0;
 	}
 
 	/* Get a virtual interrupt number */

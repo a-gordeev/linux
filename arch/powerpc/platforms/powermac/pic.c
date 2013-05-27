@@ -301,6 +301,7 @@ static void __init pmac_pic_probe_oldstyle(void)
 	struct device_node *slave = NULL;
 	u8 __iomem *addr;
 	struct resource r;
+	unsigned int virq;
 
 	/* Set our get_irq function */
 	ppc_md.get_irq = pmac_pic_get_irq;
@@ -389,7 +390,9 @@ static void __init pmac_pic_probe_oldstyle(void)
 
 	printk(KERN_INFO "irq: System has %d possible interrupts\n", max_irqs);
 #ifdef CONFIG_XMON
-	setup_irq(irq_create_mapping(NULL, 20), &xmon_action);
+	virq = irq_create_mapping(NULL, 20);
+	BUG_ON(virq == NO_IRQ);
+	setup_irq(virq, &xmon_action);
 #endif
 }
 

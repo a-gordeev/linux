@@ -239,6 +239,7 @@ static __init void pas_init_IRQ(void)
 	/* The NMI/MCK source needs to be prio 15 */
 	if (nmiprop) {
 		nmi_virq = irq_create_mapping(NULL, *nmiprop);
+		BUG_ON(nmi_virq == NO_IRQ);
 		mpic_irq_set_priority(nmi_virq, 15);
 		irq_set_irq_type(nmi_virq, IRQ_TYPE_EDGE_RISING);
 		mpic_unmask_irq(irq_get_irq_data(nmi_virq));

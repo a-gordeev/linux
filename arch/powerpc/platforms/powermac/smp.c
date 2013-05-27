@@ -413,13 +413,17 @@ static struct irqaction psurge_irqaction = {
 
 static void __init smp_psurge_setup_cpu(int cpu_nr)
 {
+	unsigned int virq;
+
 	if (cpu_nr != 0 || !psurge_start)
 		return;
 
 	/* reset the entry point so if we get another intr we won't
 	 * try to startup again */
 	out_be32(psurge_start, 0x100);
-	if (setup_irq(irq_create_mapping(NULL, 30), &psurge_irqaction))
+	virq = irq_create_mapping(NULL, 30);
+	BUG_ON(virq == NO_IRQ);
+	if (setup_irq(virq, &psurge_irqaction))
 		printk(KERN_ERR "Couldn't get primary IPI interrupt");
 }
 
