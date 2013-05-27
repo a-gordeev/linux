@@ -357,18 +357,35 @@ static int rtas_msi_check_device(struct pci_dev *pdev, int nvec, int type)
 {
 	int quota, rc;
 
+	/*
+	 * Firmware currently refuses any non power of two allocation
+	 * so we round up if the quota will allow it.
+	 */
+
+	nvec = roundup_pow_of_two(nvec);
+
 	if (type == PCI_CAP_ID_MSIX)
 		rc = check_req_msix(pdev, nvec);
 	else
 		rc = check_req_msi(pdev, nvec);
 
-	if (rc)
+	/*
+	 * Prevent endless recursion with the same value of 'nvec' by rounding
+	 * 'nvec' down to the previous power of two on fallback paths.
+	 */
+
+	if (rc) {
+		if (rc > (nvec / 2))
+			rc = (nvec / 2);
 		return rc;
+	}
 
 	quota = msi_quota_for_device(pdev, nvec);
-
-	if (quota && quota < nvec)
+	if (quota && quota < nvec) {
+		if (quota > (nvec / 2))
+			quota = (nvec / 2);
 		return quota;
+	}
 
 	return 0;
 }
@@ -394,13 +411,12 @@ static int check_msix_entries(struct pci_dev *pdev)
 	return 0;
 }
 
-static int rtas_setup_msi_irqs(struct pci_dev *pdev, int nvec_in, int type)
+static int rtas_setup_msi_irqs(struct pci_dev *pdev, int nvec, int type)
 {
 	struct pci_dn *pdn;
 	int hwirq, virq, i, rc;
 	struct msi_desc *entry;
 	struct msi_msg msg;
-	int nvec = nvec_in;
 
 	pdn = get_pdn(pdev);
 	if (!pdn)
@@ -410,23 +426,10 @@ static int rtas_setup_msi_irqs(struct pci_dev *pdev, int nvec_in, int type)
 		return -EINVAL;
 
 	/*
-	 * Firmware currently refuse any non power of two allocation
-	 * so we round up if the quota will allow it.
-	 */
-	if (type == PCI_CAP_ID_MSIX) {
-		int m = roundup_pow_of_two(nvec);
-		int quota = msi_quota_for_device(pdev, m);
-
-		if (quota >= m)
-			nvec = m;
-	}
-
-	/*
 	 * Try the new more explicit firmware interface, if that fails fall
 	 * back to the old interface. The old interface is known to never
 	 * return MSI-Xs.
 	 */
-again:
 	if (type == PCI_CAP_ID_MSI) {
 		if (pdn->force_32bit_msi)
 			rc = rtas_change_msi(pdn, RTAS_CHANGE_32MSI_FN, nvec);
@@ -441,10 +444,6 @@ again:
 		rc = rtas_change_msi(pdn, RTAS_CHANGE_MSIX_FN, nvec);
 
 	if (rc != nvec) {
-		if (nvec != nvec_in) {
-			nvec = nvec_in;
-			goto again;
-		}
 		pr_debug("rtas_msi: rtas_change_msi() failed\n");
 		return rc;
 	}
