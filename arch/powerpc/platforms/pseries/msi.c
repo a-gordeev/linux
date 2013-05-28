@@ -134,13 +134,16 @@ static int rtas_query_irq_number(struct pci_dn *pdn, int offset)
 static void rtas_teardown_msi_irqs(struct pci_dev *pdev)
 {
 	struct msi_desc *entry;
+	int i, nvec;
 
 	list_for_each_entry(entry, &pdev->msi_list, list) {
 		if (entry->irq == NO_IRQ)
 			continue;
 
-		irq_set_msi_desc(entry->irq, NULL);
-		irq_dispose_mapping(entry->irq);
+		nvec = 1 << entry->msi_attrib.multiple;
+		for (i = 0; i < nvec; i++)
+			irq_set_msi_desc_off(entry->irq, i, NULL);
+		irq_dispose_mappings(entry->irq, nvec);
 	}
 
 	rtas_disable_msi(pdev);
@@ -357,9 +360,6 @@ static int rtas_msi_check_device(struct pci_dev *pdev, int nvec, int type)
 {
 	int quota, rc;
 
-	if (type == PCI_CAP_ID_MSI && nvec > 1)
-		return 1;
-
 	/*
 	 * Firmware currently refuses any non power of two allocation
 	 * so we round up if the quota will allow it.
@@ -414,7 +414,67 @@ static int check_msix_entries(struct pci_dev *pdev)
 	return 0;
 }
 
-static int rtas_setup_msi_irqs(struct pci_dev *pdev, int nvec, int type)
+static int do_rtas_setup_msi_irqs(struct pci_dev *pdev, int nvec)
+{
+	struct pci_dn *pdn;
+	int hwirq_base, virq_base, i, rc;
+	struct msi_desc *entry;
+	struct msi_msg msg;
+
+	pdn = get_pdn(pdev);
+	if (!pdn)
+		return -ENODEV;
+
+	/* The quota has already been checked in rtas_msi_check_device() */
+	nvec = roundup_pow_of_two(nvec);
+
+	/*
+	 * Try the new more explicit firmware interface, if that fails fall
+	 * back to the old interface. The old interface is known to never
+	 * return MSI-Xs.
+	 */
+	if (pdn->force_32bit_msi)
+		rc = rtas_change_msi(pdn, RTAS_CHANGE_32MSI_FN, nvec);
+	else
+		rc = rtas_change_msi(pdn, RTAS_CHANGE_MSI_FN, nvec);
+
+	if (rc < 0 && !pdn->force_32bit_msi) {
+		pr_debug("rtas_msi: trying the old firmware call.\n");
+		rc = rtas_change_msi(pdn, RTAS_CHANGE_FN, nvec);
+	}
+
+	if (rc != nvec) {
+		pr_debug("rtas_msi: rtas_change_msi() failed\n");
+		return rc;
+	}
+
+	hwirq_base = rtas_query_irq_number(pdn, 0);
+	if (hwirq_base < 0) {
+		pr_debug("rtas_msi: error (%d) getting hwirq_base\n", rc);
+		return hwirq_base;
+	}
+
+	virq_base = irq_create_mappings(NULL, hwirq_base, nvec);
+	if (virq_base == NO_IRQ) {
+		pr_debug("rtas_msi: Failed mapping hwirq_base %d\n", hwirq_base);
+		return -ENOSPC;
+	}
+
+	dev_dbg(&pdev->dev, "rtas_msi: allocated virq_base %d\n", virq_base);
+
+	entry = list_entry(pdev->msi_list.next, struct msi_desc, list);
+	for (i = 0; i < nvec; i++)
+		irq_set_msi_desc_off(virq_base, i, entry);
+	entry->msi_attrib.multiple = ilog2(nvec);
+
+	/* Read config space back so we can restore after reset */
+	read_msi_msg(virq_base, &msg);
+	entry->msg = msg;
+
+	return 0;
+}
+
+static int do_rtas_setup_msix_irqs(struct pci_dev *pdev, int nvec)
 {
 	struct pci_dn *pdn;
 	int hwirq, virq, i, rc;
@@ -425,27 +485,10 @@ static int rtas_setup_msi_irqs(struct pci_dev *pdev, int nvec, int type)
 	if (!pdn)
 		return -ENODEV;
 
-	if (type == PCI_CAP_ID_MSIX && check_msix_entries(pdev))
+	if (check_msix_entries(pdev))
 		return -EINVAL;
 
-	/*
-	 * Try the new more explicit firmware interface, if that fails fall
-	 * back to the old interface. The old interface is known to never
-	 * return MSI-Xs.
-	 */
-	if (type == PCI_CAP_ID_MSI) {
-		if (pdn->force_32bit_msi)
-			rc = rtas_change_msi(pdn, RTAS_CHANGE_32MSI_FN, nvec);
-		else
-			rc = rtas_change_msi(pdn, RTAS_CHANGE_MSI_FN, nvec);
-
-		if (rc < 0 && !pdn->force_32bit_msi) {
-			pr_debug("rtas_msi: trying the old firmware call.\n");
-			rc = rtas_change_msi(pdn, RTAS_CHANGE_FN, nvec);
-		}
-	} else
-		rc = rtas_change_msi(pdn, RTAS_CHANGE_MSIX_FN, nvec);
-
+	rc = rtas_change_msi(pdn, RTAS_CHANGE_MSIX_FN, nvec);
 	if (rc != nvec) {
 		pr_debug("rtas_msi: rtas_change_msi() failed\n");
 		return rc;
@@ -460,13 +503,13 @@ static int rtas_setup_msi_irqs(struct pci_dev *pdev, int nvec, int type)
 		}
 
 		virq = irq_create_mapping(NULL, hwirq);
-
 		if (virq == NO_IRQ) {
 			pr_debug("rtas_msi: Failed mapping hwirq %d\n", hwirq);
 			return -ENOSPC;
 		}
 
 		dev_dbg(&pdev->dev, "rtas_msi: allocated virq %d\n", virq);
+
 		irq_set_msi_desc(virq, entry);
 
 		/* Read config space back so we can restore after reset */
@@ -475,6 +518,14 @@ static int rtas_setup_msi_irqs(struct pci_dev *pdev, int nvec, int type)
 	}
 
 	return 0;
+}
+
+static int rtas_setup_msi_irqs(struct pci_dev *pdev, int nvec, int type)
+{
+	if (type == PCI_CAP_ID_MSI)
+		return do_rtas_setup_msi_irqs(pdev, nvec);
+	else
+		return do_rtas_setup_msix_irqs(pdev, nvec);
 }
 
 static void rtas_msi_pci_irq_fixup(struct pci_dev *pdev)
