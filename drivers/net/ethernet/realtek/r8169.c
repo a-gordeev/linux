@@ -6794,15 +6794,22 @@ static unsigned rtl_try_msi(struct rtl8169_private *tp,
 	void __iomem *ioaddr = tp->mmio_addr;
 	unsigned msi = 0;
 	u8 cfg2;
+	unsigned nvec = 0;
 
 	cfg2 = RTL_R8(Config2) & ~MSIEnable;
 	if (cfg->features & RTL_FEATURE_MSI) {
+		if (!pci_enable_msi_block_auto(tp->pci_dev, &nvec)) {
+			pci_disable_msi(tp->pci_dev);
+			pr_info("multi-MSI succeeded with %d vectors\n", nvec);
+		}
 		if (pci_enable_msi(tp->pci_dev)) {
 			netif_info(tp, hw, tp->dev, "no MSI. Back to INTx.\n");
 		} else {
 			cfg2 |= MSIEnable;
 			msi = RTL_FEATURE_MSI;
 		}
+	} else {
+		pr_info("no MSI. Use INTx.\n");
 	}
 	if (tp->mac_version <= RTL_GIGA_MAC_VER_06)
 		RTL_W8(Config2, cfg2);
