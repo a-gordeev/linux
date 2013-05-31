@@ -3185,6 +3185,7 @@ static int init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	const struct adapter_info *ai;
 	struct adapter *adapter = NULL;
 	struct port_info *pi;
+	unsigned int nvec;
 
 	pr_info_once("%s - version %s\n", DRV_DESC, DRV_VERSION);
 
@@ -3343,6 +3344,13 @@ static int init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	if (is_offload(adapter)) {
 		__set_bit(OFFLOAD_DEVMAP_BIT, &adapter->registered_device_map);
 		cxgb3_adapter_ofld(adapter);
+	}
+
+	if (!pci_enable_msi_block_auto(pdev, &nvec)) {
+		pci_disable_msi(pdev);
+		pr_info("multi-MSI succeeded with %d vectors\n", nvec);
+	} else {
+		pr_info("multi-MSI failed\n");
 	}
 
 	/* See what interrupts we'll be using */
