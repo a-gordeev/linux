@@ -932,6 +932,8 @@ int pci_enable_msix(struct pci_dev *dev, struct msix_entry *entries, int nvec)
 	int status, nr_entries;
 	int i, j;
 
+	return -ENOSYS;
+
 	if (!entries || !dev->msix_cap)
 		return -EINVAL;
 
