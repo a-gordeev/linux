@@ -204,7 +204,6 @@ static void virtscsi_complete_cmd(struct virtio_scsi *vscsi, void *buf)
 			set_driver_byte(sc, DRIVER_SENSE);
 	}
 
-	mempool_free(cmd, virtscsi_cmd_pool);
 	sc->scsi_done(sc);
 
 	atomic_dec(&tgt->reqs);
@@ -279,8 +278,6 @@ static void virtscsi_complete_free(struct virtio_scsi *vscsi, void *buf)
 
 	if (cmd->comp)
 		complete_all(cmd->comp);
-	else
-		mempool_free(cmd, virtscsi_cmd_pool);
 }
 
 static void virtscsi_ctrl_done(struct virtqueue *vq)
@@ -509,10 +506,7 @@ static int virtscsi_queuecommand(struct virtio_scsi *vscsi,
 		"cmd %p CDB: %#02x\n", sc, sc->cmnd[0]);
 
 	ret = SCSI_MLQUEUE_HOST_BUSY;
-	cmd = mempool_alloc(virtscsi_cmd_pool, GFP_ATOMIC);
-	if (!cmd)
-		goto out;
-
+	cmd = (struct virtio_scsi_cmd *)sc->SCp.ptr;
 	memset(cmd, 0, sizeof(*cmd));
 	cmd->sc = sc;
 	cmd->req.cmd = (struct virtio_scsi_cmd_req){
@@ -533,10 +527,7 @@ static int virtscsi_queuecommand(struct virtio_scsi *vscsi,
 			      sizeof cmd->req.cmd, sizeof cmd->resp.cmd,
 			      GFP_ATOMIC) == 0)
 		ret = 0;
-	else
-		mempool_free(cmd, virtscsi_cmd_pool);
 
-out:
 	return ret;
 }
 
@@ -684,6 +675,9 @@ static struct scsi_host_template virtscsi_host_template_single = {
 	.proc_name = "virtio_scsi",
 	.this_id = -1,
 	.queuecommand = virtscsi_queuecommand_single,
+	.queuecommand_mq = virtscsi_queuecommand_single,
+	.scsi_mq = true,
+	.cmd_size = sizeof(struct virtio_scsi_cmd),
 	.eh_abort_handler = virtscsi_abort,
 	.eh_device_reset_handler = virtscsi_device_reset,
 
@@ -694,12 +688,16 @@ static struct scsi_host_template virtscsi_host_template_single = {
 	.target_destroy = virtscsi_target_destroy,
 };
 
+#warning FIXME: Need to pass nr_hw_queues into scsi-mq
 static struct scsi_host_template virtscsi_host_template_multi = {
 	.module = THIS_MODULE,
 	.name = "Virtio SCSI HBA",
 	.proc_name = "virtio_scsi",
 	.this_id = -1,
 	.queuecommand = virtscsi_queuecommand_multi,
+	.queuecommand_mq = virtscsi_queuecommand_multi,
+	.scsi_mq = true,
+	.cmd_size = sizeof(struct virtio_scsi_cmd),
 	.eh_abort_handler = virtscsi_abort,
 	.eh_device_reset_handler = virtscsi_device_reset,
 
