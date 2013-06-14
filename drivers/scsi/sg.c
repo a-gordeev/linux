@@ -52,6 +52,7 @@ static int sg_version_num = 30534;	/* 2 digits for each component */
 #include <linux/blktrace_api.h>
 #include <linux/mutex.h>
 #include <linux/ratelimit.h>
+#include <linux/blk-mq.h>
 
 #include "scsi.h"
 #include <scsi/scsi_dbg.h>
@@ -1649,9 +1650,19 @@ static int sg_start_req(Sg_request *srp, unsigned char *cmd)
 	SCSI_LOG_TIMEOUT(4, printk(KERN_INFO "sg_start_req: dxfer_len=%d\n",
 				   dxfer_len));
 
-	rq = blk_get_request(q, rw, GFP_ATOMIC);
-	if (!rq)
-		return -ENOMEM;
+	printk("Failing SCSI_GENERIC >>>>>>>>>>>>\n");
+	dump_stack();
+	return -ENOMEM;
+
+	if (q->mq_ops) {
+		rq = blk_mq_alloc_request(q, rw, GFP_ATOMIC);
+		if (!rq)
+			return -ENOMEM;
+	} else {
+		rq = blk_get_request(q, rw, GFP_ATOMIC);
+		if (!rq)
+			return -ENOMEM;
+	}
 
 	memcpy(rq->cmd, cmd, hp->cmd_len);
 
@@ -1739,7 +1750,12 @@ static int sg_finish_rem_req(Sg_request * srp)
 		if (srp->bio)
 			ret = blk_rq_unmap_user(srp->bio);
 
-		blk_put_request(srp->rq);
+		if (srp->rq->q->mq_ops) {
+			printk("SGIO: Calling blk_mq_end_io >>>>>>>>>>>\n");
+			blk_mq_end_io(srp->rq, 0);
+		} else {
+			blk_put_request(srp->rq);
+		}
 	}
 
 	if (srp->res_used)
