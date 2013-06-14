@@ -31,7 +31,7 @@
 
 #include "scsi_priv.h"
 #include "scsi_logging.h"
-
+#include "scsi-mq.h"
 
 #define SG_MEMPOOL_NR		ARRAY_SIZE(scsi_sg_pools)
 #define SG_MEMPOOL_SIZE		2
@@ -653,7 +653,6 @@ static void scsi_free_sgtable(struct scsi_data_buffer *sdb)
 
 static void __scsi_release_buffers(struct scsi_cmnd *cmd, int do_bidi_check)
 {
-
 	if (cmd->sdb.table.nents)
 		scsi_free_sgtable(&cmd->sdb);
 
@@ -1025,18 +1024,9 @@ void scsi_io_completion(struct scsi_cmnd *cmd, unsigned int good_bytes)
 	}
 }
 
-static int scsi_init_sgtable(struct request *req, struct scsi_data_buffer *sdb,
-			     gfp_t gfp_mask)
+static void scsi_init_sgtable(struct request *req, struct scsi_data_buffer *sdb)
 {
 	int count;
-
-	/*
-	 * If sg table allocation fails, requeue request later.
-	 */
-	if (unlikely(scsi_alloc_sgtable(sdb, req->nr_phys_segments,
-					gfp_mask))) {
-		return BLKPREP_DEFER;
-	}
 
 	req->buffer = NULL;
 
@@ -1048,7 +1038,6 @@ static int scsi_init_sgtable(struct request *req, struct scsi_data_buffer *sdb,
 	BUG_ON(count > sdb->table.nents);
 	sdb->table.nents = count;
 	sdb->length = blk_rq_bytes(req);
-	return BLKPREP_OK;
 }
 
 /*
@@ -1065,10 +1054,22 @@ static int scsi_init_sgtable(struct request *req, struct scsi_data_buffer *sdb,
 int scsi_init_io(struct scsi_cmnd *cmd, gfp_t gfp_mask)
 {
 	struct request *rq = cmd->request;
+	int error;
+	/*
+	 * Use pre-allocation of cmd->sdb scatterlists with scsi-mq..
+	 */
+	if (rq->mq_ctx) {
+		BUG_ON(rq->nr_phys_segments > SCSI_MAX_SG_SEGMENTS);
+	} else {
+		/*
+		 * If sg table allocation fails, requeue request later.
+		 */
+		if (unlikely(scsi_alloc_sgtable(&cmd->sdb, rq->nr_phys_segments,
+						gfp_mask)))
+			return BLKPREP_DEFER;
+	}
 
-	int error = scsi_init_sgtable(rq, &cmd->sdb, gfp_mask);
-	if (error)
-		goto err_exit;
+	scsi_init_sgtable(rq, &cmd->sdb);
 
 	if (blk_bidi_rq(rq)) {
 		struct scsi_data_buffer *bidi_sdb = kmem_cache_zalloc(
@@ -1079,9 +1080,7 @@ int scsi_init_io(struct scsi_cmnd *cmd, gfp_t gfp_mask)
 		}
 
 		rq->next_rq->special = bidi_sdb;
-		error = scsi_init_sgtable(rq->next_rq, bidi_sdb, GFP_ATOMIC);
-		if (error)
-			goto err_exit;
+		scsi_init_sgtable(rq->next_rq, bidi_sdb);
 	}
 
 	if (blk_integrity_rq(rq)) {
@@ -1091,9 +1090,22 @@ int scsi_init_io(struct scsi_cmnd *cmd, gfp_t gfp_mask)
 		BUG_ON(prot_sdb == NULL);
 		ivecs = blk_rq_count_integrity_sg(rq->q, rq->bio);
 
-		if (scsi_alloc_sgtable(prot_sdb, ivecs, gfp_mask)) {
-			error = BLKPREP_DEFER;
-			goto err_exit;
+		if (rq->mq_ctx) {
+			struct Scsi_Host *host = cmd->device->host;
+
+			if (ivecs > host->hostt->sg_tablesize) {
+				printk("SCSI CDB: : 0x%02x scsi_bufflen: %u scsi_sg_count: %u\n",
+					cmd->cmnd[0], scsi_bufflen(cmd), scsi_sg_count(cmd));
+				printk("ivecs: %d sg_tablesize: %d\n", ivecs,
+					host->hostt->sg_tablesize);
+				BUG_ON(1);
+			}
+			prot_sdb->table.sgl = cmd->mq_prot_sgl;
+		} else {
+			if (scsi_alloc_sgtable(prot_sdb, ivecs, gfp_mask)) {
+				error = BLKPREP_DEFER;
+				goto err_exit;
+			}
 		}
 
 		count = blk_rq_map_integrity_sg(rq->q, rq->bio,
