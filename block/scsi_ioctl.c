@@ -28,6 +28,7 @@
 #include <linux/slab.h>
 #include <linux/times.h>
 #include <linux/uio.h>
+#include <linux/blk-mq.h>
 #include <asm/uaccess.h>
 
 #include <scsi/scsi.h>
@@ -247,7 +248,7 @@ static int blk_fill_sghdr_rq(struct request_queue *q, struct request *rq,
 }
 
 static int blk_complete_sghdr_rq(struct request *rq, struct sg_io_hdr *hdr,
-				 struct bio *bio)
+				 struct bio *bio, bool mq)
 {
 	int r, ret = 0;
 
@@ -277,7 +278,11 @@ static int blk_complete_sghdr_rq(struct request *rq, struct sg_io_hdr *hdr,
 	r = blk_rq_unmap_user(bio);
 	if (!ret)
 		ret = r;
-	blk_put_request(rq);
+
+	if (mq)
+		blk_mq_free_request(rq);
+	else
+		blk_put_request(rq);
 
 	return ret;
 }
@@ -290,6 +295,7 @@ static int sg_io(struct request_queue *q, struct gendisk *bd_disk,
 	struct request *rq;
 	char sense[SCSI_SENSE_BUFFERSIZE];
 	struct bio *bio;
+	bool mq = false;
 
 	if (hdr->interface_id != 'S')
 		return -EINVAL;
@@ -311,9 +317,20 @@ static int sg_io(struct request_queue *q, struct gendisk *bd_disk,
 			break;
 		}
 
-	rq = blk_get_request(q, writing ? WRITE : READ, GFP_KERNEL);
-	if (!rq)
-		return -ENOMEM;
+	if (q->mq_ops) {
+		rq = blk_mq_alloc_request(q, writing ? WRITE : READ,
+					  GFP_KERNEL);
+		if (!rq)
+			return -ENOMEM;
+
+		mq = true;
+		printk("sg_io: blk-mq: rq: %p\n", rq);
+	} else {
+		rq = blk_get_request(q, writing ? WRITE : READ,
+				     GFP_KERNEL);
+		if (!rq)
+			return -ENOMEM;
+	}
 
 	if (blk_fill_sghdr_rq(q, rq, hdr, mode)) {
 		blk_put_request(rq);
@@ -387,9 +404,13 @@ static int sg_io(struct request_queue *q, struct gendisk *bd_disk,
 
 	hdr->duration = jiffies_to_msecs(jiffies - start_time);
 
-	return blk_complete_sghdr_rq(rq, hdr, bio);
+	return blk_complete_sghdr_rq(rq, hdr, bio, mq);
 out:
-	blk_put_request(rq);
+	if (mq)
+		blk_mq_free_request(rq);
+	else
+		blk_put_request(rq);
+
 	return ret;
 }
 
@@ -434,6 +455,8 @@ int sg_scsi_ioctl(struct request_queue *q, struct gendisk *disk, fmode_t mode,
 	int err;
 	unsigned int in_len, out_len, bytes, opcode, cmdlen;
 	char *buffer = NULL, sense[SCSI_SENSE_BUFFERSIZE];
+
+	printk("entering sg_scsi_ioctl q: %p >>>>>>>>>>>>>\n", q);
 
 	if (!sic)
 		return -EINVAL;
@@ -532,7 +555,8 @@ out:
 	
 error:
 	kfree(buffer);
-	blk_put_request(rq);
+	if (!q->mq_ops)
+		blk_put_request(rq);
 	return err;
 }
 EXPORT_SYMBOL_GPL(sg_scsi_ioctl);
@@ -551,7 +575,9 @@ static int __blk_send_generic(struct request_queue *q, struct gendisk *bd_disk,
 	rq->cmd[4] = data;
 	rq->cmd_len = 6;
 	err = blk_execute_rq(q, bd_disk, rq, 0);
+#if 0
 	blk_put_request(rq);
+#endif
 
 	return err;
 }
