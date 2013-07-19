@@ -199,11 +199,11 @@ int scsi_mq_alloc_queue(struct Scsi_Host *sh, struct scsi_device *sdev)
 	int i, j;
 
 	sdev->sdev_mq_reg.ops = &scsi_mq_ops;
-	sdev->sdev_mq_reg.queue_depth = sdev->queue_depth;
+	sdev->sdev_mq_reg.queue_depth = min((short)sh->hostt->can_queue,
+					    sh->hostt->cmd_per_lun);
 	sdev->sdev_mq_reg.cmd_size = sizeof(struct scsi_cmnd) + sh->hostt->cmd_size;
 	sdev->sdev_mq_reg.numa_node = NUMA_NO_NODE;
 	sdev->sdev_mq_reg.nr_hw_queues = 1;
-	sdev->sdev_mq_reg.queue_depth = 64;
 	sdev->sdev_mq_reg.flags = BLK_MQ_F_SHOULD_MERGE;
 
 	printk("Calling blk_mq_init_queue: scsi_mq_ops: %p, queue_depth: %d,"
