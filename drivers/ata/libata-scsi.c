@@ -1144,7 +1144,11 @@ static int ata_scsi_dev_config(struct scsi_device *sdev,
 			"sector_size=%u > PAGE_SIZE, PIO may malfunction\n",
 			sdev->sector_size);
 
-	blk_queue_update_dma_alignment(q, sdev->sector_size - 1);
+	if (!q->mq_ops) {
+		blk_queue_update_dma_alignment(q, sdev->sector_size - 1);
+	} else {
+		printk("Skipping dma_alignment for libata w/ scsi-mq\n");
+	}
 
 	if (dev->flags & ATA_DFLAG_AN)
 		set_bit(SDEV_EVT_MEDIA_CHANGE, sdev->supported_events);
