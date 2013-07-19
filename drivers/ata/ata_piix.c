@@ -1066,6 +1066,8 @@ static u8 piix_vmw_bmdma_status(struct ata_port *ap)
 
 static struct scsi_host_template piix_sht = {
 	ATA_BMDMA_SHT(DRV_NAME),
+	.scsi_mq	= true,
+	.queuecommand_mq = ata_scsi_queuecmd,
 };
 
 static struct ata_port_operations piix_sata_ops = {
