@@ -25,7 +25,10 @@ static void blk_end_sync_rq(struct request *rq, int error)
 	struct completion *waiting = rq->end_io_data;
 
 	rq->end_io_data = NULL;
-	if (!rq->q->mq_ops) {
+	if (rq->q->mq_ops) {
+		if (rq->bio)
+			bio_endio(rq->bio, error);
+	} else {
 		__blk_put_request(rq->q, rq);
 	}
 
