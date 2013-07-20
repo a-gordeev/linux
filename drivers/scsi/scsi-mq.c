@@ -93,19 +93,7 @@ struct scsi_cmnd *scsi_mq_end_request(struct scsi_cmnd *sc, int error,
 #endif
 
 //FIXME: Add proper blk_mq_end_io residual bytes + requeue
-	if (rq->end_io) {
-#if 0
-		printk("scsi_mq_end_request: Calling rq->end_io BLOCK_PC for"
-			" CDB: 0x%02x\n", sc->cmnd[0]);
-#endif
-		rq->end_io(rq, error);
-	} else {
-#if 0
-		printk("scsi_mq_end_request: Calling blk_mq_end_io for CDB: 0x%02x\n",
-				sc->cmnd[0]);
-#endif
-		blk_mq_end_io(rq, error);
-	}
+	blk_mq_end_io(rq, error);
 //FIXME: Need to do equiv of scsi_next_command to kick hctx..?
 
 	return NULL;
