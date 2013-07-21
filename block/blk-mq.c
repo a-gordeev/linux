@@ -220,6 +220,7 @@ struct request *blk_mq_alloc_request(struct request_queue *q, int rw, gfp_t gfp)
 	blk_mq_put_ctx(rq->mq_ctx);
 	return rq;
 }
+EXPORT_SYMBOL(blk_mq_alloc_request);
 
 struct request *blk_mq_alloc_reserved_request(struct request_queue *q, int rw,
 					      gfp_t gfp)
