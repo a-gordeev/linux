@@ -1650,10 +1650,6 @@ static int sg_start_req(Sg_request *srp, unsigned char *cmd)
 	SCSI_LOG_TIMEOUT(4, printk(KERN_INFO "sg_start_req: dxfer_len=%d\n",
 				   dxfer_len));
 
-	printk("Failing SCSI_GENERIC >>>>>>>>>>>>\n");
-	dump_stack();
-	return -ENOMEM;
-
 	if (q->mq_ops) {
 		rq = blk_mq_alloc_request(q, rw, GFP_ATOMIC);
 		if (!rq)
@@ -1751,8 +1747,8 @@ static int sg_finish_rem_req(Sg_request * srp)
 			ret = blk_rq_unmap_user(srp->bio);
 
 		if (srp->rq->q->mq_ops) {
-			printk("SGIO: Calling blk_mq_end_io >>>>>>>>>>>\n");
-			blk_mq_end_io(srp->rq, 0);
+			printk("SGIO: Calling blk_mq_free_request >>>>>>>>>>>\n");
+			blk_mq_free_request(srp->rq);
 		} else {
 			blk_put_request(srp->rq);
 		}
