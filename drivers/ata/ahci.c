@@ -92,6 +92,8 @@ static int ahci_pci_device_resume(struct pci_dev *pdev);
 
 static struct scsi_host_template ahci_sht = {
 	AHCI_SHT("ahci"),
+	.scsi_mq = true,
+	.queuecommand_mq = ata_scsi_queuecmd,
 };
 
 static struct ata_port_operations ahci_vt8251_ops = {
