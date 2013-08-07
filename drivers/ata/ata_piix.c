@@ -1103,6 +1103,8 @@ static struct device_attribute *piix_sidpr_shost_attrs[] = {
 static struct scsi_host_template piix_sidpr_sht = {
 	ATA_BMDMA_SHT(DRV_NAME),
 	.shost_attrs		= piix_sidpr_shost_attrs,
+	.scsi_mq		= true,
+	.queuecommand_mq	= ata_scsi_queuecmd,
 };
 
 static struct ata_port_operations piix_sidpr_sata_ops = {
