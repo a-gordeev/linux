@@ -71,7 +71,6 @@ void blk_execute_rq_nowait(struct request_queue *q, struct gendisk *bd_disk,
 //FIXME: Allow at_head = 1 operation
 //FIXME: Check for queue dying + is_pm_resume
 	if (q->mq_ops) {
-		printk("Calling blk_mq_insert_request from blk_execute_rq_nowait >>>>>>>>>>>>>>>>\n");
 		blk_mq_insert_request(q, rq, true);
 		return;
 	}

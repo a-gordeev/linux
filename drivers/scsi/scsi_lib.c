@@ -238,8 +238,6 @@ int scsi_execute(struct scsi_device *sdev, const unsigned char *cmd,
 	int ret = DRIVER_ERROR << 24;
 
 	if (q->mq_ops) {
-		printk("Entering scsi_execute with q->mq_ops: %p\n", q->mq_ops);
-
 #if 0
 		struct blk_mq_hw_ctx *hctx;
 		struct blk_mq_ctx *ctx;
@@ -258,8 +256,6 @@ int scsi_execute(struct scsi_device *sdev, const unsigned char *cmd,
 		req = blk_mq_alloc_request(q, write, __GFP_WAIT);
 		if (!req)
 			return ret;
-
-		printk("Allocated blk-mq req: %p, req->tag: %u\n", req, req->tag);
 #endif
 	} else {
 		req = blk_get_request(sdev->request_queue, write, __GFP_WAIT);
@@ -299,7 +295,6 @@ int scsi_execute(struct scsi_device *sdev, const unsigned char *cmd,
 	ret = req->errors;
  out:
 	if (q->mq_ops) {
-		printk("scsi_execute(): Calling blk_mq_free_request >>>\n");
 		blk_mq_free_request(req);
 	} else {
 		blk_put_request(req);
