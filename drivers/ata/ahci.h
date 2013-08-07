@@ -334,7 +334,9 @@ extern struct device_attribute *ahci_sdev_attrs[];
 	.sg_tablesize		= AHCI_MAX_SG,				\
 	.dma_boundary		= AHCI_DMA_BOUNDARY,			\
 	.shost_attrs		= ahci_shost_attrs,			\
-	.sdev_attrs		= ahci_sdev_attrs
+	.sdev_attrs		= ahci_sdev_attrs,			\
+	.scsi_mq		= true,					\
+	.queuecommand_mq	= ata_scsi_queuecmd
 
 extern struct ata_port_operations ahci_ops;
 extern struct ata_port_operations ahci_pmp_retry_srst_ops;
