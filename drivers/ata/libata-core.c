@@ -72,6 +72,8 @@
 #include "libata.h"
 #include "libata-transport.h"
 
+#include "../../block/blk-mq-tag.h"
+
 /* debounce timing parameters in msecs { interval, duration, timeout } */
 const unsigned long sata_deb_timing_normal[]		= {   5,  100, 2000 };
 const unsigned long sata_deb_timing_hotplug[]		= {  25,  500, 2000 };
@@ -1569,18 +1571,8 @@ unsigned ata_exec_internal_sg(struct ata_device *dev,
 
 	/* initialize internal qc */
 
-	/* XXX: Tag 0 is used for drivers with legacy EH as some
-	 * drivers choke if any other tag is given.  This breaks
-	 * ata_tag_internal() test for those drivers.  Don't use new
-	 * EH stuff without converting to it.
-	 */
-	if (ap->ops->error_handler)
-		tag = ATA_TAG_INTERNAL;
-	else
-		tag = 0;
-
-	if (test_and_set_bit(tag, &ap->qc_allocated))
-		BUG();
+	tag = blk_mq_get_tag(ap->qc_tags, GFP_ATOMIC, true);
+	BUG_ON(tag != ATA_TAG_INTERNAL);
 	qc = __ata_qc_from_tag(ap, tag);
 
 	qc->tag = tag;
@@ -4733,21 +4725,17 @@ void swap_buf_le16(u16 *buf, unsigned int buf_words)
 static struct ata_queued_cmd *ata_qc_new(struct ata_port *ap)
 {
 	struct ata_queued_cmd *qc = NULL;
-	unsigned int i;
+	unsigned int tag;
 
 	/* no command while frozen */
 	if (unlikely(ap->pflags & ATA_PFLAG_FROZEN))
 		return NULL;
 
-	/* the last tag is reserved for internal command. */
-	for (i = 0; i < ATA_MAX_QUEUE - 1; i++)
-		if (!test_and_set_bit(i, &ap->qc_allocated)) {
-			qc = __ata_qc_from_tag(ap, i);
-			break;
-		}
+	tag = blk_mq_get_tag(ap->qc_tags, GFP_ATOMIC, false);
+	qc = __ata_qc_from_tag(ap, tag);
 
 	if (qc)
-		qc->tag = i;
+		qc->tag = tag;
 
 	return qc;
 }
@@ -4799,7 +4787,7 @@ void ata_qc_free(struct ata_queued_cmd *qc)
 	tag = qc->tag;
 	if (likely(ata_tag_valid(tag))) {
 		qc->tag = ATA_TAG_POISON;
-		clear_bit(tag, &ap->qc_allocated);
+		blk_mq_put_tag(ap->qc_tags, tag);
 	}
 }
 
@@ -5639,6 +5627,12 @@ struct ata_port *ata_port_alloc(struct ata_host *host)
 	if (!ap)
 		return NULL;
 
+	ap->qc_tags = blk_mq_init_tags(ATA_MAX_QUEUE, 1, NUMA_NO_NODE);
+	if (!ap->qc_tags) {
+		kfree(ap);
+		return NULL;
+	}
+
 	ap->pflags |= ATA_PFLAG_INITIALIZING | ATA_PFLAG_FROZEN;
 	ap->lock = &host->lock;
 	ap->print_id = -1;
@@ -5677,6 +5671,14 @@ struct ata_port *ata_port_alloc(struct ata_host *host)
 	return ap;
 }
 
+static void ata_port_free(struct ata_port *ap)
+{
+	kfree(ap->pmp_link);
+	kfree(ap->slave_link);
+	blk_mq_free_tags(ap->qc_tags);
+	kfree(ap);
+}
+
 static void ata_host_release(struct device *gendev, void *res)
 {
 	struct ata_host *host = dev_get_drvdata(gendev);
@@ -5691,9 +5693,7 @@ static void ata_host_release(struct device *gendev, void *res)
 		if (ap->scsi_host)
 			scsi_host_put(ap->scsi_host);
 
-		kfree(ap->pmp_link);
-		kfree(ap->slave_link);
-		kfree(ap);
+		ata_port_free(ap);
 		host->ports[i] = NULL;
 	}
 
