@@ -156,7 +156,8 @@ static int acpi_register_gsi_xen(struct device *dev, u32 gsi,
 struct xen_pci_frontend_ops *xen_pci_frontend;
 EXPORT_SYMBOL_GPL(xen_pci_frontend);
 
-static int xen_setup_msi_irqs(struct pci_dev *dev, int nvec, int type)
+static int xen_setup_msi_irqs(struct pci_dev *dev,
+			      int nvec, int nvec_mme, int type)
 {
 	int irq, ret, i;
 	struct msi_desc *msidesc;
@@ -218,7 +219,8 @@ static void xen_msi_compose_msg(struct pci_dev *pdev, unsigned int pirq,
 	msg->data = XEN_PIRQ_MSI_DATA;
 }
 
-static int xen_hvm_setup_msi_irqs(struct pci_dev *dev, int nvec, int type)
+static int xen_hvm_setup_msi_irqs(struct pci_dev *dev,
+				  int nvec, int nvec_mme, int type)
 {
 	int irq, pirq;
 	struct msi_desc *msidesc;
@@ -266,7 +268,8 @@ error:
 #ifdef CONFIG_XEN_DOM0
 static bool __read_mostly pci_seg_supported = true;
 
-static int xen_initdom_setup_msi_irqs(struct pci_dev *dev, int nvec, int type)
+static int xen_initdom_setup_msi_irqs(struct pci_dev *dev,
+				      int nvec, int nvec_mme, int type)
 {
 	int ret = 0;
 	struct msi_desc *msidesc;

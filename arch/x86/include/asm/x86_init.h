@@ -175,7 +175,8 @@ struct msi_msg;
 struct msi_desc;
 
 struct x86_msi_ops {
-	int (*setup_msi_irqs)(struct pci_dev *dev, int nvec, int type);
+	int (*setup_msi_irqs)(struct pci_dev *dev,
+			      int nvec, int nvec_mme, int type);
 	void (*compose_msi_msg)(struct pci_dev *dev, unsigned int irq,
 				unsigned int dest, struct msi_msg *msg,
 			       u8 hpet_id);

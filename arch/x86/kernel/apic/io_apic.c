@@ -3060,7 +3060,7 @@ int setup_msi_irq(struct pci_dev *dev, struct msi_desc *msidesc,
 	return 0;
 }
 
-int native_setup_msi_irqs(struct pci_dev *dev, int nvec, int type)
+int native_setup_msi_irqs(struct pci_dev *dev, int nvec, int nvec_mme, int type)
 {
 	struct msi_desc *msidesc;
 	unsigned int irq;

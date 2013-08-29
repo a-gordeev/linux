@@ -49,9 +49,9 @@ static void irq_remapping_disable_io_apic(void)
 		disconnect_bsp_APIC(0);
 }
 
-static int do_setup_msi_irqs(struct pci_dev *dev, int nvec)
+static int do_setup_msi_irqs(struct pci_dev *dev, int nvec, int nvec_pow2)
 {
-	int ret, sub_handle, nvec_pow2, index = 0;
+	int ret, sub_handle, index = 0;
 	unsigned int irq;
 	struct msi_desc *msidesc;
 
@@ -60,12 +60,12 @@ static int do_setup_msi_irqs(struct pci_dev *dev, int nvec)
 	WARN_ON(msidesc->irq);
 	WARN_ON(msidesc->msi_attrib.multiple);
 	WARN_ON(msidesc->nvec_used);
+	BUG_ON(!is_power_of_2(nvec_pow2));
 
 	irq = irq_alloc_hwirqs(nvec, dev_to_node(&dev->dev));
 	if (irq == 0)
 		return -ENOSPC;
 
-	nvec_pow2 = __roundup_pow_of_two(nvec);
 	msidesc->nvec_used = nvec;
 	msidesc->msi_attrib.multiple = ilog2(nvec_pow2);
 	for (sub_handle = 0; sub_handle < nvec; sub_handle++) {
@@ -140,10 +140,10 @@ error:
 }
 
 static int irq_remapping_setup_msi_irqs(struct pci_dev *dev,
-					int nvec, int type)
+					int nvec, int nvec_mme, int type)
 {
 	if (type == PCI_CAP_ID_MSI)
-		return do_setup_msi_irqs(dev, nvec);
+		return do_setup_msi_irqs(dev, nvec, nvec_mme);
 	else
 		return do_setup_msix_irqs(dev, nvec);
 }
