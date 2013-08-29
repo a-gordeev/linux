@@ -1194,7 +1194,7 @@ static int ahci_init_interrupts(struct pci_dev *pdev, unsigned int n_ports,
 	if (nvec < n_ports)
 		goto single_msi;
 
-	rc = pci_enable_msi_exact(pdev, nvec);
+	rc = pci_enable_msi_partial(pdev, n_ports, nvec);
 	if (rc == -ENOSPC)
 		goto single_msi;
 	else if (rc < 0)
@@ -1207,7 +1207,7 @@ static int ahci_init_interrupts(struct pci_dev *pdev, unsigned int n_ports,
 		goto single_msi;
 	}
 
-	return nvec;
+	return n_ports;
 
 single_msi:
 	if (pci_enable_msi(pdev))
