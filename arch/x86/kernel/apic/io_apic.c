@@ -3140,7 +3140,7 @@ int native_setup_msi_irqs(struct pci_dev *dev, int nvec, int type)
 
 	/* Multiple MSI vectors only supported with interrupt remapping */
 	if (type == PCI_CAP_ID_MSI && nvec > 1)
-		return 1;
+		return -EINVAL;
 
 	node = dev_to_node(&dev->dev);
 	irq_want = nr_irqs_gsi;
