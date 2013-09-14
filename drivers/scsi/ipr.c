@@ -9527,7 +9527,7 @@ static int ipr_probe_ioa(struct pci_dev *pdev,
 		ipr_number_of_msix = IPR_MAX_MSIX_VECTORS;
 	}
 
-	if (ioa_cfg->ipr_chip->intr_type == IPR_USE_MSI &&
+	if (ioa_cfg->ipr_chip->intr_type == IPR_USE_MSIX &&
 			ipr_enable_msix(ioa_cfg) == 0)
 		ioa_cfg->intr_flag = IPR_USE_MSIX;
 	else if (ioa_cfg->ipr_chip->intr_type == IPR_USE_MSI &&
