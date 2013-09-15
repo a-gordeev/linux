@@ -854,17 +854,23 @@ static int mthca_enable_msi_x(struct mthca_dev *mdev)
 	struct msix_entry entries[3];
 	int err;
 
+	err = pci_msix_table_size(mdev->pdev);
+	if (err < 0)
+		return err;
+	if (err < ARRAY_SIZE(entries)) {
+		mthca_info(mdev, "Only %d MSI-X vectors available, "
+			   "not using MSI-X\n", err);
+
+		return -ENOSPC;
+	}
+
 	entries[0].entry = 0;
 	entries[1].entry = 1;
 	entries[2].entry = 2;
 
 	err = pci_enable_msix(mdev->pdev, entries, ARRAY_SIZE(entries));
-	if (err) {
-		if (err > 0)
-			mthca_info(mdev, "Only %d MSI-X vectors available, "
-				   "not using MSI-X\n", err);
+	if (err)
 		return err;
-	}
 
 	mdev->eq_table.eq[MTHCA_EQ_COMP ].msi_x_vector = entries[0].vector;
 	mdev->eq_table.eq[MTHCA_EQ_ASYNC].msi_x_vector = entries[1].vector;
