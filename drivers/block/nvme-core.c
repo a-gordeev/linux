@@ -1659,39 +1659,35 @@ static int nvme_setup_io_queues(struct nvme_dev *dev)
 		dev->queues[0]->q_db = dev->dbs;
 	}
 
+	result = pci_msix_table_size(pdev);
+	if (result < 0)
+		goto msi;
+
+	nr_io_queues = min(result, q_count);
 	for (i = 0; i < nr_io_queues; i++)
 		dev->entry[i].entry = i;
-	for (;;) {
-		result = pci_enable_msix(pdev, dev->entry, nr_io_queues);
-		if (result == 0) {
-			break;
-		} else if (result > 0) {
-			nr_io_queues = result;
-			continue;
-		} else {
-			nr_io_queues = 0;
-			break;
-		}
+
+	result = pci_enable_msix(pdev, dev->entry, nr_io_queues);
+	if (result == 0)
+		goto irq;
+
+ msi:
+	result = pci_get_msi_cap(pdev);
+	if (result < 0)
+		goto one;
+
+	nr_io_queues = min(result, q_count);
+	result = pci_enable_msi_block(pdev, nr_io_queues);
+	if (result == 0) {
+		for (i = 0; i < nr_io_queues; i++)
+			dev->entry[i].vector = i + pdev->irq;
+		goto irq;
 	}
 
-	if (nr_io_queues == 0) {
-		nr_io_queues = q_count;
-		for (;;) {
-			result = pci_enable_msi_block(pdev, nr_io_queues);
-			if (result == 0) {
-				for (i = 0; i < nr_io_queues; i++)
-					dev->entry[i].vector = i + pdev->irq;
-				break;
-			} else if (result > 0) {
-				nr_io_queues = result;
-				continue;
-			} else {
-				nr_io_queues = 1;
-				break;
-			}
-		}
-	}
+ one:
+	nr_io_queues = 1;
 
+ irq:
 	result = queue_request_irq(dev, dev->queues[0], "nvme admin");
 	/* XXX: handle failure here */
 
