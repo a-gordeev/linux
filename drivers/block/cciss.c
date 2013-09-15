@@ -4079,7 +4079,11 @@ static void cciss_interrupt_mode(ctlr_info_t *h)
 		goto default_int_mode;
 
 	if (pci_find_capability(h->pdev, PCI_CAP_ID_MSIX)) {
-		err = pci_enable_msix(h->pdev, cciss_msix_entries, 4);
+		err = pci_msix_table_size(h->pdev);
+		if (err < ARRAY_SIZE(cciss_msix_entries))
+			goto default_int_mode;
+		err = pci_enable_msix(h->pdev, cciss_msix_entries,
+				      ARRAY_SIZE(cciss_msix_entries));
 		if (!err) {
 			h->intr[0] = cciss_msix_entries[0].vector;
 			h->intr[1] = cciss_msix_entries[1].vector;
@@ -4088,15 +4092,8 @@ static void cciss_interrupt_mode(ctlr_info_t *h)
 			h->msix_vector = 1;
 			return;
 		}
-		if (err > 0) {
-			dev_warn(&h->pdev->dev,
-				"only %d MSI-X vectors available\n", err);
-			goto default_int_mode;
-		} else {
-			dev_warn(&h->pdev->dev,
-				"MSI-X init failed %d\n", err);
-			goto default_int_mode;
-		}
+		dev_warn(&h->pdev->dev, "MSI-X init failed %d\n", err);
+		goto default_int_mode;
 	}
 	if (pci_find_capability(h->pdev, PCI_CAP_ID_MSI)) {
 		if (!pci_enable_msi(h->pdev))
