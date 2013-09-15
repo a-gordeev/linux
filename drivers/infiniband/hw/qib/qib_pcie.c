@@ -218,10 +218,6 @@ static void qib_msix_setup(struct qib_devdata *dd, int pos, u32 *msixcnt,
 	if (tabsize > *msixcnt)
 		tabsize = *msixcnt;
 	ret = pci_enable_msix(dd->pcidev, msix_entry, tabsize);
-	if (ret > 0) {
-		tabsize = ret;
-		ret = pci_enable_msix(dd->pcidev, msix_entry, tabsize);
-	}
 do_intx:
 	if (ret) {
 		qib_dev_err(dd,
