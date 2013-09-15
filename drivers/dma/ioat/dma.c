@@ -937,6 +937,7 @@ msix:
 				chan = ioat_chan_by_index(device, j);
 				devm_free_irq(dev, msix->vector, chan);
 			}
+			pci_disable_msix(pdev);
 			goto msix_single_vector;
 		}
 	}
