@@ -1904,13 +1904,13 @@ static int ath10k_pci_start_intr_msi(struct ath10k *ar)
 	int ret;
 
 	ret = pci_enable_msi(ar_pci->pdev);
-	if (ret < 0)
+	if (ret)
 		return ret;
 
 	ret = request_irq(ar_pci->pdev->irq,
 			  ath10k_pci_interrupt_handler,
 			  IRQF_SHARED, "ath10k_pci", ar);
-	if (ret < 0) {
+	if (ret) {
 		pci_disable_msi(ar_pci->pdev);
 		return ret;
 	}
@@ -1927,7 +1927,7 @@ static int ath10k_pci_start_intr_legacy(struct ath10k *ar)
 	ret = request_irq(ar_pci->pdev->irq,
 			  ath10k_pci_interrupt_handler,
 			  IRQF_SHARED, "ath10k_pci", ar);
-	if (ret < 0)
+	if (ret)
 		return ret;
 
 	/*
