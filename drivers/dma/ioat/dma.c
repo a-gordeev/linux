@@ -915,15 +915,19 @@ int ioat_dma_setup_interrupts(struct ioatdma_device *device)
 
 msix:
 	/* The number of MSI-X vectors should equal the number of channels */
+	err = pci_msix_table_size(pdev);
+	if (err < 0)
+		goto msi;
+	if (err < device->common.chancnt)
+		goto msix_single_vector;
+
 	msixcnt = device->common.chancnt;
 	for (i = 0; i < msixcnt; i++)
 		device->msix_entries[i].entry = i;
 
 	err = pci_enable_msix(pdev, device->msix_entries, msixcnt);
-	if (err < 0)
+	if (err)
 		goto msi;
-	if (err > 0)
-		goto msix_single_vector;
 
 	for (i = 0; i < msixcnt; i++) {
 		msix = &device->msix_entries[i];
