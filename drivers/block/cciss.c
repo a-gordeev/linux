@@ -4081,7 +4081,7 @@ static void cciss_interrupt_mode(ctlr_info_t *h)
 	if (pci_find_capability(h->pdev, PCI_CAP_ID_MSIX)) {
 		err = pci_msix_table_size(h->pdev);
 		if (err < ARRAY_SIZE(cciss_msix_entries))
-			goto default_int_mode;
+			goto single_msi_mode;
 		err = pci_enable_msix(h->pdev, cciss_msix_entries,
 				      ARRAY_SIZE(cciss_msix_entries));
 		if (!err) {
@@ -4093,8 +4093,8 @@ static void cciss_interrupt_mode(ctlr_info_t *h)
 			return;
 		}
 		dev_warn(&h->pdev->dev, "MSI-X init failed %d\n", err);
-		goto default_int_mode;
 	}
+single_msi_mode:
 	if (pci_find_capability(h->pdev, PCI_CAP_ID_MSI)) {
 		if (!pci_enable_msi(h->pdev))
 			h->msi_vector = 1;
