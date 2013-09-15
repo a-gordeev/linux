@@ -1859,7 +1859,7 @@ static void ath10k_pci_tasklet(unsigned long data)
 	}
 }
 
-static int ath10k_pci_start_intr_msix(struct ath10k *ar, int num)
+static int ath10k_pci_start_intr_mmsi(struct ath10k *ar, int num)
 {
 	struct ath10k_pci *ar_pci = ath10k_pci_priv(ar);
 	int ret;
@@ -1894,7 +1894,7 @@ static int ath10k_pci_start_intr_msix(struct ath10k *ar, int num)
 		}
 	}
 
-	ath10k_info("MSI-X interrupt handling (%d intrs)\n", num);
+	ath10k_info("Multiple MSIs interrupt handling (%d intrs)\n", num);
 	return 0;
 }
 
@@ -1982,11 +1982,12 @@ static int ath10k_pci_start_intr(struct ath10k *ar)
 		num = 1;
 
 	if (num > 1) {
-		ret = ath10k_pci_start_intr_msix(ar, num);
+		ret = ath10k_pci_start_intr_mmsi(ar, num);
 		if (ret == 0)
 			goto exit;
 
-		ath10k_warn("MSI-X didn't succeed (%d), trying MSI\n", ret);
+		ath10k_warn("Multiple MSIs didn't succeed (%d), trying MSI\n",
+			    ret);
 		num = 1;
 	}
 
