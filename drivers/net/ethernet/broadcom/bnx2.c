@@ -6218,25 +6218,26 @@ bnx2_enable_msix(struct bnx2 *bp, int msix_vecs)
 	 *  is setup properly */
 	BNX2_RD(bp, BNX2_PCI_MSIX_CONTROL);
 
-	for (i = 0; i < BNX2_MAX_MSIX_VEC; i++) {
-		msix_ent[i].entry = i;
-		msix_ent[i].vector = 0;
-	}
-
 	total_vecs = msix_vecs;
 #ifdef BCM_CNIC
 	total_vecs++;
 #endif
-	rc = -ENOSPC;
-	while (total_vecs >= BNX2_MIN_MSIX_VEC) {
-		rc = pci_enable_msix(bp->pdev, msix_ent, total_vecs);
-		if (rc <= 0)
-			break;
-		if (rc > 0)
-			total_vecs = rc;
+	rc = pci_msix_table_size(bp->pdev);
+	if (rc < 0)
+		return;
+
+	total_vecs = min(total_vecs, rc);
+	if (total_vecs < BNX2_MIN_MSIX_VEC)
+		return;
+
+	BUG_ON(total_vecs > ARRAY_SIZE(msix_ent));
+	for (i = 0; i < total_vecs; i++) {
+		msix_ent[i].entry = i;
+		msix_ent[i].vector = 0;
 	}
 
-	if (rc != 0)
+	rc = pci_enable_msix(bp->pdev, msix_ent, total_vecs);
+	if (rc)
 		return;
 
 	msix_vecs = total_vecs;
