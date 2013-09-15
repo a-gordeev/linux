@@ -377,19 +377,27 @@ static int vmci_enable_msix(struct pci_dev *pdev,
 {
 	int i;
 	int result;
+	int nvec;
 
-	for (i = 0; i < VMCI_MAX_INTRS; ++i) {
+	result = pci_msix_table_size(pdev);
+	if (result < 0)
+		return result;
+
+	nvec = min(result, VMCI_MAX_INTRS);
+	if (nvec < VMCI_MAX_INTRS)
+		nvec = 1;
+
+	for (i = 0; i < nvec; ++i) {
 		vmci_dev->msix_entries[i].entry = i;
 		vmci_dev->msix_entries[i].vector = i;
 	}
 
-	result = pci_enable_msix(pdev, vmci_dev->msix_entries, VMCI_MAX_INTRS);
-	if (result == 0)
-		vmci_dev->exclusive_vectors = true;
-	else if (result > 0)
-		result = pci_enable_msix(pdev, vmci_dev->msix_entries, 1);
+	result = pci_enable_msix(pdev, vmci_dev->msix_entries, nvec);
+	if (result)
+		return result;
 
-	return result;
+	vmci_dev->exclusive_vectors = true;
+	return 0;
 }
 
 /*
