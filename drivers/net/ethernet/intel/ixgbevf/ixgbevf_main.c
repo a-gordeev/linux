@@ -1773,7 +1773,7 @@ static int ixgbevf_acquire_msix_vectors(struct ixgbevf_adapter *adapter,
 	}
 
 	if (vectors < vector_threshold)
-		err = -ENOMEM;
+		err = -ENOSPC;
 
 	if (err) {
 		dev_err(&adapter->pdev->dev,
