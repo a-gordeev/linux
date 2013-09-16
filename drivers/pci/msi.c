@@ -702,7 +702,7 @@ static int msix_capability_init(struct pci_dev *dev,
 
 	ret = arch_setup_msi_irqs(dev, nvec, PCI_CAP_ID_MSIX);
 	if (ret)
-		goto out_avail;
+		goto error;
 
 	/*
 	 * Some devices require MSI-X to be enabled before we can touch the
@@ -716,7 +716,7 @@ static int msix_capability_init(struct pci_dev *dev,
 
 	ret = populate_msi_sysfs(dev);
 	if (ret)
-		goto out_free;
+		goto error;
 
 	/* Set MSI-X enabled bits and unmask the function */
 	pci_intx_for_msi(dev, 0);
@@ -727,24 +727,7 @@ static int msix_capability_init(struct pci_dev *dev,
 
 	return 0;
 
-out_avail:
-	if (ret < 0) {
-		/*
-		 * If we had some success, report the number of irqs
-		 * we succeeded in setting up.
-		 */
-		struct msi_desc *entry;
-		int avail = 0;
-
-		list_for_each_entry(entry, &dev->msi_list, list) {
-			if (entry->irq != 0)
-				avail++;
-		}
-		if (avail != 0)
-			ret = avail;
-	}
-
-out_free:
+error:
 	free_msi_irqs(dev);
 
 	return ret;
@@ -815,13 +798,11 @@ EXPORT_SYMBOL(pci_get_msi_cap);
  * @dev: device to configure
  * @nvec: number of interrupts to configure
  *
- * Allocate IRQs for a device with the MSI capability.
- * This function returns a negative errno if an error occurs.  If it
- * is unable to allocate the number of interrupts requested, it returns
- * the number of interrupts it might be able to allocate.  If it successfully
- * allocates at least the number of interrupts requested, it returns 0 and
- * updates the @dev's irq member to the lowest new interrupt number; the
- * other interrupt numbers allocated to this device are consecutive.
+ * Allocate IRQs for a device with the MSI capability. This function returns
+ * a negative errno if an error occurs. If it successfully allocates at least
+ * the number of interrupts requested, it returns 0 and updates the @dev's
+ * irq member to the lowest new interrupt number; the other interrupt numbers
+ * allocated to this device are consecutive.
  */
 int pci_enable_msi_block(struct pci_dev *dev, unsigned int nvec)
 {
@@ -831,7 +812,7 @@ int pci_enable_msi_block(struct pci_dev *dev, unsigned int nvec)
 	if (maxvec < 0)
 		return maxvec;
 	if (nvec > maxvec)
-		return maxvec;
+		return -EINVAL;
 
 	status = pci_msi_check_device(dev, nvec, PCI_CAP_ID_MSI);
 	if (status)
@@ -851,26 +832,22 @@ int pci_enable_msi_block(struct pci_dev *dev, unsigned int nvec)
 }
 EXPORT_SYMBOL(pci_enable_msi_block);
 
-int pci_enable_msi_block_auto(struct pci_dev *dev, unsigned int *maxvec)
+int pci_enable_msi_block_auto(struct pci_dev *dev, unsigned int *maxvec_ptr)
 {
-	int ret, nvec;
-	u16 msgctl;
+	int ret, maxvec;
 
-	ret = pci_get_msi_cap(dev);
-	if (ret < 0)
+	maxvec = pci_get_msi_cap(dev);
+	if (maxvec < 0)
+		return maxvec;
+
+	if (maxvec_ptr)
+		*maxvec_ptr = maxvec;
+
+	ret = pci_enable_msi_block(dev, maxvec);
+	if (ret)
 		return ret;
 
-	if (maxvec)
-		*maxvec = ret;
-
-	do {
-		nvec = ret;
-		ret = pci_enable_msi_block(dev, nvec);
-	} while (ret > 0);
-
-	if (ret < 0)
-		return ret;
-	return nvec;
+	return maxvec;
 }
 EXPORT_SYMBOL(pci_enable_msi_block_auto);
 
@@ -939,9 +916,6 @@ EXPORT_SYMBOL(pci_msix_table_size);
  * MSI-X mode enabled on its hardware device function. A return of zero
  * indicates the successful configuration of MSI-X capability structure
  * with new allocated MSI-X irqs. A return of < 0 indicates a failure.
- * Or a return of > 0 indicates that driver request is exceeding the number
- * of irqs or MSI-X vectors available. Driver should use the returned value to
- * re-send its request.
  **/
 int pci_enable_msix(struct pci_dev *dev, struct msix_entry *entries, int nvec)
 {
@@ -959,7 +933,7 @@ int pci_enable_msix(struct pci_dev *dev, struct msix_entry *entries, int nvec)
 	if (nr_entries < 0)
 		return nr_entries;
 	if (nvec > nr_entries)
-		return nr_entries;
+		return -EINVAL;
 
 	/* Check for any invalid entries */
 	for (i = 0; i < nvec; i++) {
