@@ -832,25 +832,6 @@ int pci_enable_msi_block(struct pci_dev *dev, unsigned int nvec)
 }
 EXPORT_SYMBOL(pci_enable_msi_block);
 
-int pci_enable_msi_block_auto(struct pci_dev *dev, unsigned int *maxvec_ptr)
-{
-	int ret, maxvec;
-
-	maxvec = pci_get_msi_cap(dev);
-	if (maxvec < 0)
-		return maxvec;
-
-	if (maxvec_ptr)
-		*maxvec_ptr = maxvec;
-
-	ret = pci_enable_msi_block(dev, maxvec);
-	if (ret)
-		return ret;
-
-	return maxvec;
-}
-EXPORT_SYMBOL(pci_enable_msi_block_auto);
-
 void pci_msi_shutdown(struct pci_dev *dev)
 {
 	struct msi_desc *desc;
