@@ -711,37 +711,39 @@ static void ixgbe_acquire_msix_vectors(struct ixgbe_adapter *adapter,
 	 * Right now, we simply care about how many we'll get; we'll
 	 * set them up later while requesting irq's.
 	 */
-	while (vectors >= vector_threshold) {
-		err = pci_enable_msix(adapter->pdev, adapter->msix_entries,
-				      vectors);
-		if (!err) /* Success in acquiring all requested vectors. */
-			break;
-		else if (err < 0)
-			vectors = 0; /* Nasty failure, quit now */
-		else /* err == number of vectors we should try again with */
-			vectors = err;
-	}
+	err = pci_msix_table_size(adapter->pdev);
+	if (err < 0)
+		goto err_alloc_msix;
 
-	if (vectors < vector_threshold) {
-		/* Can't allocate enough MSI-X interrupts?  Oh well.
-		 * This just means we'll go with either a single MSI
-		 * vector or fall back to legacy interrupts.
-		 */
-		netif_printk(adapter, hw, KERN_DEBUG, adapter->netdev,
-			     "Unable to allocate MSI-X interrupts\n");
-		adapter->flags &= ~IXGBE_FLAG_MSIX_ENABLED;
-		kfree(adapter->msix_entries);
-		adapter->msix_entries = NULL;
-	} else {
-		adapter->flags |= IXGBE_FLAG_MSIX_ENABLED; /* Woot! */
-		/*
-		 * Adjust for only the vectors we'll use, which is minimum
-		 * of max_msix_q_vectors + NON_Q_VECTORS, or the number of
-		 * vectors we were allocated.
-		 */
-		vectors -= NON_Q_VECTORS;
-		adapter->num_q_vectors = min(vectors, adapter->max_q_vectors);
-	}
+	vectors = min(vectors, err);
+	if (vectors < vector_threshold)
+		goto err_alloc_msix;
+
+	err = pci_enable_msix(adapter->pdev, adapter->msix_entries, vectors);
+	if (err)
+		goto err_alloc_msix;
+
+	adapter->flags |= IXGBE_FLAG_MSIX_ENABLED; /* Woot! */
+	/*
+	 * Adjust for only the vectors we'll use, which is minimum
+	 * of max_msix_q_vectors + NON_Q_VECTORS, or the number of
+	 * vectors we were allocated.
+	 */
+	vectors -= NON_Q_VECTORS;
+	adapter->num_q_vectors = min(vectors, adapter->max_q_vectors);
+
+	return;
+
+err_alloc_msix:
+	/* Can't allocate enough MSI-X interrupts?  Oh well.
+	 * This just means we'll go with either a single MSI
+	 * vector or fall back to legacy interrupts.
+	 */
+	netif_printk(adapter, hw, KERN_DEBUG, adapter->netdev,
+		     "Unable to allocate MSI-X interrupts\n");
+	adapter->flags &= ~IXGBE_FLAG_MSIX_ENABLED;
+	kfree(adapter->msix_entries);
+	adapter->msix_entries = NULL;
 }
 
 static void ixgbe_add_ring(struct ixgbe_ring *ring,
