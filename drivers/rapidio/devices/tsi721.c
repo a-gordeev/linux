@@ -734,6 +734,16 @@ static int tsi721_enable_msix(struct tsi721_device *priv)
 	int err;
 	int i;
 
+	err = pci_msix_table_size(priv->pdev);
+	if (err < 0)
+		goto err_out;
+	if (err < ARRAY_SIZE(entries)) {
+		dev_info(&priv->pdev->dev,
+			 "Only %d MSI-X vectors available, not using MSI-X\n",
+			 err);
+		return -ENOSPC;
+	}
+
 	entries[TSI721_VECT_IDB].entry = TSI721_MSIX_SR2PC_IDBQ_RCV(IDB_QUEUE);
 	entries[TSI721_VECT_PWRX].entry = TSI721_MSIX_SRIO_MAC_INT;
 
@@ -769,16 +779,8 @@ static int tsi721_enable_msix(struct tsi721_device *priv)
 #endif /* CONFIG_RAPIDIO_DMA_ENGINE */
 
 	err = pci_enable_msix(priv->pdev, entries, ARRAY_SIZE(entries));
-	if (err) {
-		if (err > 0)
-			dev_info(&priv->pdev->dev,
-				 "Only %d MSI-X vectors available, "
-				 "not using MSI-X\n", err);
-		else
-			dev_err(&priv->pdev->dev,
-				"Failed to enable MSI-X (err=%d)\n", err);
-		return err;
-	}
+	if (err)
+		goto err_out;
 
 	/*
 	 * Copy MSI-X vector information into tsi721 private structure
@@ -833,6 +835,11 @@ static int tsi721_enable_msix(struct tsi721_device *priv)
 #endif /* CONFIG_RAPIDIO_DMA_ENGINE */
 
 	return 0;
+
+err_out:
+	dev_err(&priv->pdev->dev,
+		"Failed to enable MSI-X (err=%d)\n", err);
+	return err;
 }
 #endif /* CONFIG_PCI_MSI */
 
