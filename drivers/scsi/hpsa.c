@@ -4079,34 +4079,32 @@ static void hpsa_interrupt_mode(struct ctlr_info *h)
 	int err, i;
 	struct msix_entry hpsa_msix_entries[MAX_REPLY_QUEUES];
 
-	for (i = 0; i < MAX_REPLY_QUEUES; i++) {
-		hpsa_msix_entries[i].vector = 0;
-		hpsa_msix_entries[i].entry = i;
-	}
-
 	/* Some boards advertise MSI but don't really support it */
 	if ((h->board_id == 0x40700E11) || (h->board_id == 0x40800E11) ||
 	    (h->board_id == 0x40820E11) || (h->board_id == 0x40830E11))
 		goto default_int_mode;
 	if (pci_find_capability(h->pdev, PCI_CAP_ID_MSIX)) {
 		dev_info(&h->pdev->dev, "MSIX\n");
+
+		err = pci_msix_table_size(h->pdev);
+		if (err < ARRAY_SIZE(hpsa_msix_entries))
+			goto default_int_mode;
+
+		for (i = 0; i < ARRAY_SIZE(hpsa_msix_entries); i++) {
+			hpsa_msix_entries[i].vector = 0;
+			hpsa_msix_entries[i].entry = i;
+		}
+
 		err = pci_enable_msix(h->pdev, hpsa_msix_entries,
-						MAX_REPLY_QUEUES);
+				      ARRAY_SIZE(hpsa_msix_entries));
 		if (!err) {
 			for (i = 0; i < MAX_REPLY_QUEUES; i++)
 				h->intr[i] = hpsa_msix_entries[i].vector;
 			h->msix_vector = 1;
 			return;
 		}
-		if (err > 0) {
-			dev_warn(&h->pdev->dev, "only %d MSI-X vectors "
-			       "available\n", err);
-			goto default_int_mode;
-		} else {
-			dev_warn(&h->pdev->dev, "MSI-X init failed %d\n",
-			       err);
-			goto default_int_mode;
-		}
+		dev_warn(&h->pdev->dev, "MSI-X init failed %d\n", err);
+		goto default_int_mode;
 	}
 	if (pci_find_capability(h->pdev, PCI_CAP_ID_MSI)) {
 		dev_info(&h->pdev->dev, "MSI\n");
