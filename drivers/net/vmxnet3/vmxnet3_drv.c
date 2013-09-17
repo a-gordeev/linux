@@ -2722,7 +2722,7 @@ vmxnet3_acquire_msix_vectors(struct vmxnet3_adapter *adapter,
 		} else if (err < 0) {
 			dev_err(&adapter->netdev->dev,
 				   "Failed to enable MSI-X, error: %d\n", err);
-			vectors = 0;
+			return err;
 		} else if (err < vector_threshold) {
 			break;
 		} else {
