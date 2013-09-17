@@ -533,7 +533,7 @@ csio_enable_msix(struct csio_hw *hw)
 			csio_info(hw, "Not using MSI-X, remainder:%d\n", rv);
 
 		kfree(entries);
-		return -ENOMEM;
+		return -ENOSPC;
 	}
 
 	/* Save off vectors */
