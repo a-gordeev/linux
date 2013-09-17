@@ -512,6 +512,16 @@ csio_enable_msix(struct csio_hw *hw)
 	if (hw->flags & CSIO_HWF_USING_SOFT_PARAMS || !csio_is_hw_master(hw))
 		cnt = min_t(uint8_t, hw->cfg_niq, cnt);
 
+	rv = pci_msix_table_size(hw->pdev);
+	if (rv < 0)
+		return rv;
+
+	cnt = min(cnt, rv);
+	if (cnt < min) {
+		csio_info(hw, "Not using MSI-X, remainder:%d\n", rv);
+		return -ENOSPC;
+	}
+
 	entries = kzalloc(sizeof(struct msix_entry) * cnt, GFP_KERNEL);
 	if (!entries)
 		return -ENOMEM;
@@ -521,19 +531,15 @@ csio_enable_msix(struct csio_hw *hw)
 
 	csio_dbg(hw, "FW supp #niq:%d, trying %d msix's\n", hw->cfg_niq, cnt);
 
-	while ((rv = pci_enable_msix(hw->pdev, entries, cnt)) >= min)
-		cnt = rv;
+	rv = pci_enable_msix(hw->pdev, entries, cnt);
 	if (!rv) {
 		if (cnt < (hw->num_sqsets + extra)) {
 			csio_dbg(hw, "Reducing sqsets to %d\n", cnt - extra);
 			csio_reduce_sqsets(hw, cnt - extra);
 		}
 	} else {
-		if (rv > 0)
-			csio_info(hw, "Not using MSI-X, remainder:%d\n", rv);
-
 		kfree(entries);
-		return -ENOSPC;
+		return rv;
 	}
 
 	/* Save off vectors */
