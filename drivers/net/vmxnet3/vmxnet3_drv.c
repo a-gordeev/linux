@@ -2710,7 +2710,7 @@ static int
 vmxnet3_acquire_msix_vectors(struct vmxnet3_adapter *adapter,
 			     int vectors)
 {
-	int err = 0, vector_threshold;
+	int err = -EINVAL, vector_threshold;
 	vector_threshold = VMXNET3_LINUX_MIN_MSIX_VECT;
 
 	while (vectors >= vector_threshold) {
