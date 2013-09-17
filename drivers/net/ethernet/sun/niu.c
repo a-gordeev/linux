@@ -9051,26 +9051,28 @@ static void niu_try_msix(struct niu *np, u8 *ldg_num_map)
 		    (np->port == 0 ? 3 : 1));
 	BUG_ON(num_irqs > (NIU_NUM_LDG / parent->num_ports));
 
-retry:
+	err = pci_msix_table_size(pdev);
+	if (err < 0)
+		goto fail;
+
+	num_irqs = min(num_irqs, err);
 	for (i = 0; i < num_irqs; i++) {
 		msi_vec[i].vector = 0;
 		msi_vec[i].entry = i;
 	}
 
 	err = pci_enable_msix(pdev, msi_vec, num_irqs);
-	if (err < 0) {
-		np->flags &= ~NIU_FLAGS_MSIX;
-		return;
-	}
-	if (err > 0) {
-		num_irqs = err;
-		goto retry;
-	}
+	if (err)
+		goto fail;
 
 	np->flags |= NIU_FLAGS_MSIX;
 	for (i = 0; i < num_irqs; i++)
 		np->ldg[i].irq = msi_vec[i].vector;
 	np->num_ldg = num_irqs;
+	return;
+
+fail:
+	np->flags &= ~NIU_FLAGS_MSIX;
 }
 
 static int niu_n2_irq_init(struct niu *np, u8 *ldg_num_map)
