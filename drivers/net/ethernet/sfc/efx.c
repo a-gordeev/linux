@@ -1308,21 +1308,24 @@ static int efx_probe_interrupts(struct efx_nic *efx)
 		n_channels += extra_channels;
 		n_channels = min(n_channels, max_channels);
 
-		for (i = 0; i < n_channels; i++)
-			xentries[i].entry = i;
-		rc = pci_enable_msix(efx->pci_dev, xentries, n_channels);
-		if (rc > 0) {
+		rc = pci_msix_table_size(efx->pci_dev);
+		if (rc < 0)
+			goto msi;
+
+		if (rc < n_channels) {
 			netif_err(efx, drv, efx->net_dev,
 				  "WARNING: Insufficient MSI-X vectors"
 				  " available (%d < %u).\n", rc, n_channels);
 			netif_err(efx, drv, efx->net_dev,
 				  "WARNING: Performance may be reduced.\n");
-			EFX_BUG_ON_PARANOID(rc >= n_channels);
 			n_channels = rc;
-			rc = pci_enable_msix(efx->pci_dev, xentries,
-					     n_channels);
 		}
 
+		EFX_BUG_ON_PARANOID(n_channels > ARRAY_SIZE(xentries));
+		for (i = 0; i < n_channels; i++)
+			xentries[i].entry = i;
+
+		rc = pci_enable_msix(efx->pci_dev, xentries, n_channels);
 		if (rc == 0) {
 			efx->n_channels = n_channels;
 			if (n_channels > extra_channels)
@@ -1340,6 +1343,7 @@ static int efx_probe_interrupts(struct efx_nic *efx)
 				efx_get_channel(efx, i)->irq =
 					xentries[i].vector;
 		} else {
+msi:
 			/* Fall back to single channel MSI */
 			efx->interrupt_mode = EFX_INT_MODE_MSI;
 			netif_err(efx, drv, efx->net_dev,
