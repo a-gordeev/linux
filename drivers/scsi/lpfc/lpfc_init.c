@@ -8637,13 +8637,17 @@ lpfc_sli4_enable_msix(struct lpfc_hba *phba)
 
 	/* Configure MSI-X capability structure */
 	vectors = phba->cfg_fcp_io_channel;
-enable_msix_vectors:
-	rc = pci_enable_msix(phba->pcidev, phba->sli4_hba.msix_entries,
-			     vectors);
-	if (rc > 1) {
-		vectors = rc;
-		goto enable_msix_vectors;
-	} else if (rc) {
+
+	rc = pci_msix_table_size(phba->pcidev);
+	if (rc < 0)
+		goto msg_fail_out;
+
+	vectors = min(vectors, rc);
+	if (vectors > 1)
+		rc = pci_enable_msix(phba->pcidev, phba->sli4_hba.msix_entries,
+				     vectors);
+	if (rc) {
+msg_fail_out:
 		lpfc_printf_log(phba, KERN_INFO, LOG_INIT,
 				"0484 PCI enable MSI-X failed (%d)\n", rc);
 		goto vec_fail_out;
