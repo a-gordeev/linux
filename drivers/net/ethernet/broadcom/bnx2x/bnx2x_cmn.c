@@ -1556,7 +1556,7 @@ void bnx2x_free_irq(struct bnx2x *bp)
 
 int bnx2x_enable_msix(struct bnx2x *bp)
 {
-	int msix_vec = 0, i, rc;
+	int msix_vec = 0, nvec, i, rc;
 
 	/* VFs don't have a default status block */
 	if (IS_PF(bp)) {
@@ -1582,60 +1582,52 @@ int bnx2x_enable_msix(struct bnx2x *bp)
 		msix_vec++;
 	}
 
+	rc = pci_msix_table_size(bp->pdev);
+	if (rc < 0)
+		goto no_msix;
+
+	nvec = min(msix_vec, rc);
+	if (nvec < BNX2X_MIN_MSIX_VEC_CNT(bp))
+		nvec = 1;
+
 	DP(BNX2X_MSG_SP, "about to request enable msix with %d vectors\n",
 	   msix_vec);
 
-	rc = pci_enable_msix(bp->pdev, &bp->msix_table[0], msix_vec);
+	rc = pci_enable_msix(bp->pdev, &bp->msix_table[0], nvec);
+	if (rc)
+		goto no_msix;
 
 	/*
 	 * reconfigure number of tx/rx queues according to available
 	 * MSI-X vectors
 	 */
-	if (rc >= BNX2X_MIN_MSIX_VEC_CNT(bp)) {
+	if (nvec == 1) {
+		bp->flags |= USING_SINGLE_MSIX_FLAG;
+
+		bp->num_ethernet_queues = 1;
+		bp->num_queues = bp->num_ethernet_queues + bp->num_cnic_queues;
+	} else if (nvec < msix_vec) {
 		/* how less vectors we will have? */
-		int diff = msix_vec - rc;
+		int diff = msix_vec - nvec;
 
-		BNX2X_DEV_INFO("Trying to use less MSI-X vectors: %d\n", rc);
-
-		rc = pci_enable_msix(bp->pdev, &bp->msix_table[0], rc);
-
-		if (rc) {
-			BNX2X_DEV_INFO("MSI-X is not attainable rc %d\n", rc);
-			goto no_msix;
-		}
 		/*
 		 * decrease number of queues by number of unallocated entries
 		 */
 		bp->num_ethernet_queues -= diff;
 		bp->num_queues = bp->num_ethernet_queues + bp->num_cnic_queues;
+	}
 
+	if (nvec != msix_vec)
 		BNX2X_DEV_INFO("New queue configuration set: %d\n",
 			       bp->num_queues);
-	} else if (rc > 0) {
-		/* Get by with single vector */
-		rc = pci_enable_msix(bp->pdev, &bp->msix_table[0], 1);
-		if (rc) {
-			BNX2X_DEV_INFO("Single MSI-X is not attainable rc %d\n",
-				       rc);
-			goto no_msix;
-		}
-
-		BNX2X_DEV_INFO("Using single MSI-X vector\n");
-		bp->flags |= USING_SINGLE_MSIX_FLAG;
-
-		BNX2X_DEV_INFO("set number of queues to 1\n");
-		bp->num_ethernet_queues = 1;
-		bp->num_queues = bp->num_ethernet_queues + bp->num_cnic_queues;
-	} else if (rc < 0) {
-		BNX2X_DEV_INFO("MSI-X is not attainable  rc %d\n", rc);
-		goto no_msix;
-	}
 
 	bp->flags |= USING_MSIX_FLAG;
 
 	return 0;
 
 no_msix:
+	BNX2X_DEV_INFO("MSI-X is not attainable rc %d\n", rc);
+
 	/* fall to INTx if not enough memory */
 	if (rc == -ENOMEM)
 		bp->flags |= DISABLE_MSI_FLAG;
