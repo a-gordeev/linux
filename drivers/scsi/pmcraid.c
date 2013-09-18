@@ -4680,24 +4680,23 @@ pmcraid_register_interrupt_handler(struct pmcraid_instance *pinstance)
 
 	if ((pmcraid_enable_msix) &&
 		(pci_find_capability(pdev, PCI_CAP_ID_MSIX))) {
-		int num_hrrq = PMCRAID_NUM_MSIX_VECTORS;
 		struct msix_entry entries[PMCRAID_NUM_MSIX_VECTORS];
+		int num_hrrq = ARRAY_SIZE(entries);
 		int i;
-		for (i = 0; i < PMCRAID_NUM_MSIX_VECTORS; i++)
-			entries[i].entry = i;
-
-		rc = pci_enable_msix(pdev, entries, num_hrrq);
-		if (rc < 0)
-			goto pmcraid_isr_legacy;
 
 		/* Check how many MSIX vectors are allocated and register
 		 * msi-x handlers for each of them giving appropriate buffer
 		 */
-		if (rc > 0) {
-			num_hrrq = rc;
-			if (pci_enable_msix(pdev, entries, num_hrrq))
-				goto pmcraid_isr_legacy;
-		}
+		rc = pci_msix_table_size(pdev);
+		if (rc < 0)
+			goto pmcraid_isr_legacy;
+
+		num_hrrq = min(num_hrrq, rc);
+		for (i = 0; i < num_hrrq; i++)
+			entries[i].entry = i;
+
+		if (pci_enable_msix(pdev, entries, num_hrrq))
+			goto pmcraid_isr_legacy;
 
 		for (i = 0; i < num_hrrq; i++) {
 			pinstance->hrrq_vector[i].hrrq_id = i;
