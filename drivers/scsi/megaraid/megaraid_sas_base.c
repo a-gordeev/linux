@@ -3613,18 +3613,16 @@ static int megasas_init_fw(struct megasas_instance *instance)
 					     (unsigned int)num_online_cpus());
 		for (i = 0; i < instance->msix_vectors; i++)
 			instance->msixentry[i].entry = i;
-		i = pci_enable_msix(instance->pdev, instance->msixentry,
-				    instance->msix_vectors);
-		if (i >= 0) {
-			if (i) {
-				if (!pci_enable_msix(instance->pdev,
-						     instance->msixentry, i))
-					instance->msix_vectors = i;
-				else
-					instance->msix_vectors = 0;
-			}
-		} else
+		i = pci_msix_table_size(instance->pdev);
+		if (i < 0) {
 			instance->msix_vectors = 0;
+		} else {
+			if (!pci_enable_msix(instance->pdev,
+					     instance->msixentry, i))
+				instance->msix_vectors = i;
+			else
+				instance->msix_vectors = 0;
+		}
 
 		dev_info(&instance->pdev->dev, "[scsi%d]: FW supports"
 			"<%d> MSIX vector,Online CPUs: <%d>,"
