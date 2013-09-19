@@ -2836,16 +2836,20 @@ qla24xx_enable_msix(struct qla_hw_data *ha, struct rsp_que *rsp)
 	for (i = 0; i < ha->msix_count; i++)
 		entries[i].entry = i;
 
-	ret = pci_enable_msix(ha->pdev, entries, ha->msix_count);
-	if (ret) {
+	ret = pci_msix_table_size(ha->pdev);
+	if (ret < 0) {
+		goto msix_failed;
+	} else {
 		if (ret < MIN_MSIX_COUNT)
 			goto msix_failed;
 
-		ql_log(ql_log_warn, vha, 0x00c6,
-		    "MSI-X: Failed to enable support "
-		    "-- %d/%d\n Retry with %d vectors.\n",
-		    ha->msix_count, ret, ret);
-		ha->msix_count = ret;
+		if (ret < ha->msix_count) {
+			ql_log(ql_log_warn, vha, 0x00c6,
+			    "MSI-X: Failed to enable support "
+			    "-- %d/%d\n Retry with %d vectors.\n",
+			    ha->msix_count, ret, ret);
+			ha->msix_count = ret;
+		}
 		ret = pci_enable_msix(ha->pdev, entries, ha->msix_count);
 		if (ret) {
 msix_failed:
