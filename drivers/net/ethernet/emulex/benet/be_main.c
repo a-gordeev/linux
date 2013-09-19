@@ -2424,6 +2424,7 @@ static int be_msix_enable(struct be_adapter *adapter)
 					 num_vec);
 		if (!status)
 			goto done;
+		status = -ENOSPC;
 	}
 
 	dev_warn(dev, "MSIx enable failed\n");
