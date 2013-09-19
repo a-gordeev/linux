@@ -2352,7 +2352,7 @@ start:
 			"%s: MSI-X enable failed for %d vectors, ret: %d",
 			VXGE_DRIVER_NAME, vdev->intr_cnt, ret);
 		if ((max_config_vpath != VXGE_USE_DEFAULT) || (ret < 3)) {
-			ret = -ENODEV;
+			ret = -ENOSPC;
 			goto enable_msix_failed;
 		}
 
@@ -2365,10 +2365,8 @@ start:
 		vxge_close_vpaths(vdev, temp);
 		vdev->no_of_vpath = temp;
 		goto start;
-	} else if (ret < 0) {
-		ret = -ENODEV;
+	} else if (ret < 0)
 		goto enable_msix_failed;
-	}
 	return 0;
 
 enable_msix_failed:
