@@ -2297,7 +2297,21 @@ static int vxge_alloc_msix(struct vxgedev *vdev)
 	int msix_intr_vect = 0, temp;
 	vdev->intr_cnt = 0;
 
-start:
+	ret = pci_msix_table_size(vdev->pdev);
+	if (ret < 0)
+		goto alloc_entries_failed;
+
+	if (ret < (vdev->no_of_vpath * 2 + 1)) {
+		if ((max_config_vpath != VXGE_USE_DEFAULT) || (ret < 3)) {
+			ret = -ENOSPC;
+			goto alloc_entries_failed;
+		}
+		/* Try with less no of vector by reducing no of vpaths count */
+		temp = (ret - 1)/2;
+		vxge_close_vpaths(vdev, temp);
+		vdev->no_of_vpath = temp;
+	}
+
 	/* Tx/Rx MSIX Vectors count */
 	vdev->intr_cnt = vdev->no_of_vpath * 2;
 
@@ -2347,25 +2361,7 @@ start:
 	vdev->vxge_entries[j].in_use = 0;
 
 	ret = pci_enable_msix(vdev->pdev, vdev->entries, vdev->intr_cnt);
-	if (ret > 0) {
-		vxge_debug_init(VXGE_ERR,
-			"%s: MSI-X enable failed for %d vectors, ret: %d",
-			VXGE_DRIVER_NAME, vdev->intr_cnt, ret);
-		if ((max_config_vpath != VXGE_USE_DEFAULT) || (ret < 3)) {
-			ret = -ENOSPC;
-			goto enable_msix_failed;
-		}
-
-		kfree(vdev->entries);
-		kfree(vdev->vxge_entries);
-		vdev->entries = NULL;
-		vdev->vxge_entries = NULL;
-		/* Try with less no of vector by reducing no of vpaths count */
-		temp = (ret - 1)/2;
-		vxge_close_vpaths(vdev, temp);
-		vdev->no_of_vpath = temp;
-		goto start;
-	} else if (ret < 0)
+	if (ret)
 		goto enable_msix_failed;
 	return 0;
 
