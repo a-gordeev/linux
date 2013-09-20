@@ -1852,8 +1852,16 @@ static void mlx4_enable_msi_x(struct mlx4_dev *dev)
 	int i;
 
 	if (msi_x) {
+		err = pci_msix_table_size(dev->pdev);
+		if (err < 0)
+			goto no_msi;
+
+		/* Try if at least 2 vectors are available */
 		nreq = min_t(int, dev->caps.num_eqs - dev->caps.reserved_eqs,
 			     nreq);
+		nreq = min_t(int, nreq, err);
+		if (nreq < 2)
+			goto no_msi;
 
 		entries = kcalloc(nreq, sizeof *entries, GFP_KERNEL);
 		if (!entries)
@@ -1862,17 +1870,8 @@ static void mlx4_enable_msi_x(struct mlx4_dev *dev)
 		for (i = 0; i < nreq; ++i)
 			entries[i].entry = i;
 
-	retry:
 		err = pci_enable_msix(dev->pdev, entries, nreq);
 		if (err) {
-			/* Try again if at least 2 vectors are available */
-			if (err > 1) {
-				mlx4_info(dev, "Requested %d vectors, "
-					  "but only %d MSI-X vectors available, "
-					  "trying again\n", nreq, err);
-				nreq = err;
-				goto retry;
-			}
 			kfree(entries);
 			goto no_msi;
 		}
