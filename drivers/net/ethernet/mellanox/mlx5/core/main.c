@@ -119,8 +119,13 @@ static int mlx5_enable_msix(struct mlx5_core_dev *dev)
 	int err;
 	int i;
 
+	err = pci_msix_table_size(dev->pdev);
+	if (err < 0)
+		return err;
+
 	nvec = dev->caps.num_ports * num_online_cpus() + MLX5_EQ_VEC_COMP_BASE;
 	nvec = min_t(int, nvec, num_eqs);
+	nvec = min_t(int, nvec, err);
 	if (nvec <= MLX5_EQ_VEC_COMP_BASE)
 		return -ENOSPC;
 
@@ -131,20 +136,15 @@ static int mlx5_enable_msix(struct mlx5_core_dev *dev)
 	for (i = 0; i < nvec; i++)
 		table->msix_arr[i].entry = i;
 
-retry:
-	table->num_comp_vectors = nvec - MLX5_EQ_VEC_COMP_BASE;
 	err = pci_enable_msix(dev->pdev, table->msix_arr, nvec);
-	if (err <= 0) {
+	if (err) {
+		kfree(table->msix_arr);
 		return err;
-	} else if (err > MLX5_EQ_VEC_COMP_BASE) {
-		nvec = err;
-		goto retry;
 	}
 
-	mlx5_core_dbg(dev, "received %d MSI vectors out of %d requested\n", err, nvec);
-	kfree(table->msix_arr);
+	table->num_comp_vectors = nvec - MLX5_EQ_VEC_COMP_BASE;
 
-	return -ENOSPC;
+	return 0;
 }
 
 static void mlx5_disable_msix(struct mlx5_core_dev *dev)
