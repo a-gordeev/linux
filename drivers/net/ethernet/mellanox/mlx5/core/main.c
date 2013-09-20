@@ -142,6 +142,7 @@ retry:
 	}
 
 	mlx5_core_dbg(dev, "received %d MSI vectors out of %d requested\n", err, nvec);
+	kfree(table->msix_arr);
 
 	return 0;
 }
