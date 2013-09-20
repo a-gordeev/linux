@@ -122,7 +122,7 @@ static int mlx5_enable_msix(struct mlx5_core_dev *dev)
 	nvec = dev->caps.num_ports * num_online_cpus() + MLX5_EQ_VEC_COMP_BASE;
 	nvec = min_t(int, nvec, num_eqs);
 	if (nvec <= MLX5_EQ_VEC_COMP_BASE)
-		return -ENOMEM;
+		return -ENOSPC;
 
 	table->msix_arr = kzalloc(nvec * sizeof(*table->msix_arr), GFP_KERNEL);
 	if (!table->msix_arr)
@@ -144,7 +144,7 @@ retry:
 	mlx5_core_dbg(dev, "received %d MSI vectors out of %d requested\n", err, nvec);
 	kfree(table->msix_arr);
 
-	return 0;
+	return -ENOSPC;
 }
 
 static void mlx5_disable_msix(struct mlx5_core_dev *dev)
