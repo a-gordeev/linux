@@ -136,7 +136,7 @@ retry:
 	err = pci_enable_msix(dev->pdev, table->msix_arr, nvec);
 	if (err <= 0) {
 		return err;
-	} else if (err > 2) {
+	} else if (err > MLX5_EQ_VEC_COMP_BASE) {
 		nvec = err;
 		goto retry;
 	}
