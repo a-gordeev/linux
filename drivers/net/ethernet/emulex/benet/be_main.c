@@ -2412,27 +2412,23 @@ static int be_msix_enable(struct be_adapter *adapter)
 	}
 	num_vec = max(num_vec, BE_MIN_MSIX_VECTORS);
 
+	status = pci_msix_table_size(adapter->pdev);
+	if (status < 0)
+		goto fail;
+
+	num_vec = min(num_vec, status);
+	if (num_vec < BE_MIN_MSIX_VECTORS) {
+		status = -ENOSPC;
+		goto fail;
+	}
+
 	for (i = 0; i < num_vec; i++)
 		adapter->msix_entries[i].entry = i;
 
 	status = pci_enable_msix(adapter->pdev, adapter->msix_entries, num_vec);
-	if (status == 0) {
-		goto done;
-	} else if (status >= BE_MIN_MSIX_VECTORS) {
-		num_vec = status;
-		status = pci_enable_msix(adapter->pdev, adapter->msix_entries,
-					 num_vec);
-		if (!status)
-			goto done;
-		status = -ENOSPC;
-	}
+	if (status)
+		goto fail;
 
-	dev_warn(dev, "MSIx enable failed\n");
-	/* INTx is not supported in VFs, so fail probe if enable_msix fails */
-	if (!be_physfn(adapter))
-		return status;
-	return 0;
-done:
 	if (be_roce_supported(adapter)) {
 		if (num_vec > num_roce_vec) {
 			adapter->num_msix_vec = num_vec - num_roce_vec;
@@ -2445,6 +2441,13 @@ done:
 	} else
 		adapter->num_msix_vec = num_vec;
 	dev_info(dev, "enabled %d MSI-x vector(s)\n", adapter->num_msix_vec);
+	return 0;
+
+fail:
+	dev_warn(dev, "MSIx enable failed\n");
+	/* INTx is not supported in VFs, so fail probe if enable_msix fails */
+	if (!be_physfn(adapter))
+		return status;
 	return 0;
 }
 
