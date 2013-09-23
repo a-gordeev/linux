@@ -758,24 +758,23 @@ static int ntb_setup_msix(struct ntb_device *ndev)
 	struct pci_dev *pdev = ndev->pdev;
 	struct msix_entry *msix;
 	int msix_entries;
-	int rc, i, pos;
-	u16 val;
+	int rc, i;
 
-	pos = pci_find_capability(pdev, PCI_CAP_ID_MSIX);
-	if (!pos) {
-		rc = -EIO;
+	rc = pci_msix_table_size(pdev);
+	if (rc < 0)
+		goto err;
+	if ((rc < SNB_MSIX_CNT) && (ndev->hw_type != BWD_HW)) {
+		rc = -ENOSPC;
 		goto err;
 	}
-
-	rc = pci_read_config_word(pdev, pos + PCI_MSIX_FLAGS, &val);
-	if (rc)
-		goto err;
-
-	msix_entries = msix_table_size(val);
-	if (msix_entries > ndev->limits.msix_cnt) {
+	if (rc > ndev->limits.msix_cnt) {
 		rc = -EINVAL;
 		goto err;
 	}
+
+	dev_warn(&pdev->dev, "Only %d MSI-X vectors. "
+		 "Limiting the number of queues to that number.\n", rc);
+	msix_entries = rc;
 
 	ndev->msix_entries = kmalloc(sizeof(struct msix_entry) * msix_entries,
 				     GFP_KERNEL);
@@ -788,26 +787,8 @@ static int ntb_setup_msix(struct ntb_device *ndev)
 		ndev->msix_entries[i].entry = i;
 
 	rc = pci_enable_msix(pdev, ndev->msix_entries, msix_entries);
-	if (rc < 0)
+	if (rc)
 		goto err1;
-	if (rc > 0) {
-		/* On SNB, the link interrupt is always tied to 4th vector.  If
-		 * we can't get all 4, then we can't use MSI-X.
-		 */
-		if ((rc < SNB_MSIX_CNT) && (ndev->hw_type != BWD_HW)) {
-			rc = -EIO;
-			goto err1;
-		}
-
-		dev_warn(&pdev->dev,
-			 "Only %d MSI-X vectors.  Limiting the number of queues to that number.\n",
-			 rc);
-		msix_entries = rc;
-
-		rc = pci_enable_msix(pdev, ndev->msix_entries, msix_entries);
-		if (rc)
-			goto err1;
-	}
 
 	for (i = 0; i < msix_entries; i++) {
 		msix = &ndev->msix_entries[i];

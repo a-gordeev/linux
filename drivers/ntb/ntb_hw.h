@@ -55,8 +55,6 @@
 #define PCI_DEVICE_ID_INTEL_NTB_2ND_SNB		0x3C0F
 #define PCI_DEVICE_ID_INTEL_NTB_B2B_BWD		0x0C4E
 
-#define msix_table_size(control)	((control & PCI_MSIX_FLAGS_QSIZE)+1)
-
 #define NTB_BAR_MMIO		0
 #define NTB_BAR_23		2
 #define NTB_BAR_45		4
