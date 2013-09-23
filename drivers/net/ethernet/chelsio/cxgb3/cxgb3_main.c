@@ -3099,7 +3099,7 @@ static int cxgb_enable_msix(struct adapter *adap)
 
 	if (!err && vectors < (adap->params.nports + 1)) {
 		pci_disable_msix(adap->pdev);
-		err = -1;
+		err = -ENOSPC;
 	}
 
 	if (!err) {
