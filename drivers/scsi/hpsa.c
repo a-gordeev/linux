@@ -4117,7 +4117,11 @@ static void hpsa_interrupt_mode(struct ctlr_info *h)
 	}
 default_int_mode:
 #endif				/* CONFIG_PCI_MSI */
-	/* if we get here we're going to use the default interrupt mode */
+	/*
+	 * If we get here we're going to use either the
+	 * default interrupt mode or single MSI mode
+	 */
+
 	h->intr[h->intr_mode] = h->pdev->irq;
 }
 
