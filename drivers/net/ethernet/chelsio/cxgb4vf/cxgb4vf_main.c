@@ -2470,6 +2470,7 @@ static int enable_msix(struct adapter *adapter)
 	} else if (err > 0) {
 		dev_info(adapter->pdev_dev, "only %d MSI-X vectors left,"
 			 " not using MSI-X\n", err);
+		err = -ENOSPC;
 	}
 	return err;
 }
