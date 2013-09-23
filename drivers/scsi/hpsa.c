@@ -4088,7 +4088,7 @@ static void hpsa_interrupt_mode(struct ctlr_info *h)
 
 		err = pci_msix_table_size(h->pdev);
 		if (err < ARRAY_SIZE(hpsa_msix_entries))
-			goto default_int_mode;
+			goto single_msi_mode;
 
 		for (i = 0; i < ARRAY_SIZE(hpsa_msix_entries); i++) {
 			hpsa_msix_entries[i].vector = 0;
@@ -4104,8 +4104,9 @@ static void hpsa_interrupt_mode(struct ctlr_info *h)
 			return;
 		}
 		dev_warn(&h->pdev->dev, "MSI-X init failed %d\n", err);
-		goto default_int_mode;
+		goto single_msi_mode;
 	}
+single_msi_mode:
 	if (pci_find_capability(h->pdev, PCI_CAP_ID_MSI)) {
 		dev_info(&h->pdev->dev, "MSI\n");
 		if (!pci_enable_msi(h->pdev))
