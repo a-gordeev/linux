@@ -3090,25 +3090,26 @@ static int cxgb_enable_msix(struct adapter *adap)
 	int vectors;
 	int i, err;
 
-	vectors = ARRAY_SIZE(entries);
+	err = pci_msix_table_size(adap->pdev);
+	if (err < 0)
+		return err;
+
+	vectors = min_t(int, err, ARRAY_SIZE(entries));
+	if (vectors < (adap->params.nports + 1))
+		return -ENOSPC;
+
 	for (i = 0; i < vectors; ++i)
 		entries[i].entry = i;
 
-	while ((err = pci_enable_msix(adap->pdev, entries, vectors)) > 0)
-		vectors = err;
+	err = pci_enable_msix(adap->pdev, entries, vectors);
+	if (err)
+		return err;
 
-	if (!err && vectors < (adap->params.nports + 1)) {
-		pci_disable_msix(adap->pdev);
-		err = -ENOSPC;
-	}
+	for (i = 0; i < vectors; ++i)
+		adap->msix_info[i].vec = entries[i].vector;
+	adap->msix_nvectors = vectors;
 
-	if (!err) {
-		for (i = 0; i < vectors; ++i)
-			adap->msix_info[i].vec = entries[i].vector;
-		adap->msix_nvectors = vectors;
-	}
-
-	return err;
+	return 0;
 }
 
 static void print_port_info(struct adapter *adap, const struct adapter_info *ai)
