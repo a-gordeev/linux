@@ -794,7 +794,7 @@ static int ntb_setup_msix(struct ntb_device *ndev)
 		/* On SNB, the link interrupt is always tied to 4th vector.  If
 		 * we can't get all 4, then we can't use MSI-X.
 		 */
-		if (ndev->hw_type != BWD_HW) {
+		if ((rc < SNB_MSIX_CNT) && (ndev->hw_type != BWD_HW)) {
 			rc = -EIO;
 			goto err1;
 		}
