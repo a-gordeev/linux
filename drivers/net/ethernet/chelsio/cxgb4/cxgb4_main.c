@@ -5451,9 +5451,11 @@ static int enable_msix(struct adapter *adap)
 		}
 		for (i = 0; i < want; ++i)
 			adap->msix_info[i].vec = entries[i].vector;
-	} else if (err > 0)
+	} else if (err > 0) {
 		dev_info(adap->pdev_dev,
 			 "only %d MSI-X vectors left, not using MSI-X\n", err);
+		err = -ENOSPC;
+	}
 	return err;
 }
 
