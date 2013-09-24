@@ -542,7 +542,34 @@ int qlcnic_enable_msix(struct qlcnic_adapter *adapter, u32 num_msix)
 	adapter->flags &= ~(QLCNIC_MSI_ENABLED | QLCNIC_MSIX_ENABLED);
 
 	if (adapter->ahw->msix_supported) {
- enable_msix:
+		err = pci_msix_table_size(pdev);
+		if (err < 0)
+			goto fail;
+
+		if (err < num_msix) {
+			if (qlcnic_83xx_check(adapter)) {
+				if (err <
+				    (QLC_83XX_MINIMUM_VECTOR - tx_vector)) {
+					err = -ENOSPC;
+					goto fail;
+				}
+				err -= (max_tx_rings + 1);
+				num_msix = rounddown_pow_of_two(err);
+				num_msix += (max_tx_rings + 1);
+			} else {
+				num_msix = rounddown_pow_of_two(err);
+			}
+
+			if (!num_msix) {
+				err = -ENOSPC;
+				goto fail;
+			}
+		}
+
+		dev_info(&pdev->dev,
+			 "Trying to allocate %d MSI-X interrupt vectors\n",
+			 num_msix);
+
 		for (i = 0; i < num_msix; i++)
 			adapter->msix_entries[i].entry = i;
 		err = pci_enable_msix(pdev, adapter->msix_entries, num_msix);
@@ -557,28 +584,8 @@ int qlcnic_enable_msix(struct qlcnic_adapter *adapter, u32 num_msix)
 				adapter->max_sds_rings = num_msix;
 			}
 			dev_info(&pdev->dev, "using msi-x interrupts\n");
-		} else if (err > 0) {
-			dev_info(&pdev->dev,
-				 "Unable to allocate %d MSI-X interrupt vectors\n",
-				 num_msix);
-			if (qlcnic_83xx_check(adapter)) {
-				if (err < (QLC_83XX_MINIMUM_VECTOR - tx_vector))
-					return -ENOSPC;
-				err -= (max_tx_rings + 1);
-				num_msix = rounddown_pow_of_two(err);
-				num_msix += (max_tx_rings + 1);
-			} else {
-				num_msix = rounddown_pow_of_two(err);
-			}
-
-			if (num_msix) {
-				dev_info(&pdev->dev,
-					 "Trying to allocate %d MSI-X interrupt vectors\n",
-					 num_msix);
-				goto enable_msix;
-			}
-			err = -ENOSPC;
 		} else {
+fail:
 			dev_info(&pdev->dev,
 				 "Unable to allocate %d MSI-X interrupt vectors\n",
 				 num_msix);
