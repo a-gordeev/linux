@@ -2724,7 +2724,10 @@ vmxnet3_acquire_msix_vectors(struct vmxnet3_adapter *adapter,
 				   "Failed to enable MSI-X, error: %d\n", err);
 			return err;
 		} else if (err < vector_threshold) {
-			break;
+			dev_info(&adapter->pdev->dev,
+				 "Number of MSI-Xs which can be allocated "
+				 "is lower than min threshold required.\n");
+			return -ENOSPC;
 		} else {
 			/* If fails to enable required number of MSI-x vectors
 			 * try enabling minimum number of vectors required.
@@ -2736,9 +2739,6 @@ vmxnet3_acquire_msix_vectors(struct vmxnet3_adapter *adapter,
 		}
 	}
 
-	dev_info(&adapter->pdev->dev,
-		 "Number of MSI-X interrupts which can be allocated "
-		 "is lower than min threshold required.\n");
 	return err;
 }
 
