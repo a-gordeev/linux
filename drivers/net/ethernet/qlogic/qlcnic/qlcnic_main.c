@@ -564,7 +564,7 @@ int qlcnic_enable_msix(struct qlcnic_adapter *adapter, u32 num_msix)
 				 num_msix);
 			if (qlcnic_83xx_check(adapter)) {
 				if (err < (QLC_83XX_MINIMUM_VECTOR - tx_vector))
-					return err;
+					return -ENOSPC;
 				err -= (max_tx_rings + 1);
 				num_msix = rounddown_pow_of_two(err);
 				num_msix += (max_tx_rings + 1);
@@ -578,6 +578,7 @@ int qlcnic_enable_msix(struct qlcnic_adapter *adapter, u32 num_msix)
 					 num_msix);
 				goto enable_msix;
 			}
+			err = -ENOSPC;
 		} else {
 			dev_info(&pdev->dev,
 				 "Unable to allocate %d MSI-X interrupt vectors\n",
