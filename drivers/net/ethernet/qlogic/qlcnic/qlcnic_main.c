@@ -557,7 +557,6 @@ int qlcnic_enable_msix(struct qlcnic_adapter *adapter, u32 num_msix)
 				adapter->max_sds_rings = num_msix;
 			}
 			dev_info(&pdev->dev, "using msi-x interrupts\n");
-			return err;
 		} else if (err > 0) {
 			dev_info(&pdev->dev,
 				 "Unable to allocate %d MSI-X interrupt vectors\n",
