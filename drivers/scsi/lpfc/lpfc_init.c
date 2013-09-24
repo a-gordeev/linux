@@ -8631,10 +8631,6 @@ lpfc_sli4_enable_msix(struct lpfc_hba *phba)
 {
 	int vectors, rc, index;
 
-	/* Set up MSI-X multi-message vectors */
-	for (index = 0; index < phba->cfg_fcp_io_channel; index++)
-		phba->sli4_hba.msix_entries[index].entry = index;
-
 	/* Configure MSI-X capability structure */
 	vectors = phba->cfg_fcp_io_channel;
 
@@ -8648,14 +8644,14 @@ lpfc_sli4_enable_msix(struct lpfc_hba *phba)
 		goto msg_fail_out;
 	}
 
+	/* Set up MSI-X multi-message vectors */
+	for (index = 0; index < vectors; index++)
+		phba->sli4_hba.msix_entries[index].entry = index;
+
 	rc = pci_enable_msix(phba->pcidev, phba->sli4_hba.msix_entries,
 			     vectors);
-	if (rc) {
-msg_fail_out:
-		lpfc_printf_log(phba, KERN_INFO, LOG_INIT,
-				"0484 PCI enable MSI-X failed (%d)\n", rc);
-		goto vec_fail_out;
-	}
+	if (rc)
+		goto msg_fail_out;
 
 	/* Log MSI-X vector assignment */
 	for (index = 0; index < vectors; index++)
@@ -8695,7 +8691,7 @@ msg_fail_out:
 	}
 
 	lpfc_sli4_set_affinity(phba, vectors);
-	return rc;
+	return 0;
 
 cfg_fail_out:
 	/* free the irq already requested */
@@ -8705,8 +8701,11 @@ cfg_fail_out:
 
 	/* Unconfigure MSI-X capability structure */
 	pci_disable_msix(phba->pcidev);
+	return rc;
 
-vec_fail_out:
+msg_fail_out:
+	lpfc_printf_log(phba, KERN_INFO, LOG_INIT,
+			"0484 PCI enable MSI-X failed (%d)\n", rc);
 	return rc;
 }
 
