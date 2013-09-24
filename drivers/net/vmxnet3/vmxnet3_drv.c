@@ -2696,49 +2696,47 @@ vmxnet3_read_mac_addr(struct vmxnet3_adapter *adapter, u8 *mac)
 
 #ifdef CONFIG_PCI_MSI
 
-/*
- * Enable MSIx vectors.
- * Returns :
- *	0 on successful enabling of required vectors,
- *	VMXNET3_LINUX_MIN_MSIX_VECT when only minimum number of vectors required
- *	 could be enabled.
- *	number of vectors which can be enabled otherwise (this number is smaller
- *	 than VMXNET3_LINUX_MIN_MSIX_VECT)
- */
-
 static int
 vmxnet3_acquire_msix_vectors(struct vmxnet3_adapter *adapter,
 			     int vectors)
 {
-	int err = -EINVAL, vector_threshold;
-	vector_threshold = VMXNET3_LINUX_MIN_MSIX_VECT;
+	int err, vector_threshold;
 
-	while (vectors >= vector_threshold) {
-		err = pci_enable_msix(adapter->pdev, adapter->intr.msix_entries,
-				      vectors);
-		if (!err) {
-			adapter->intr.num_intrs = vectors;
-			return 0;
-		} else if (err < 0) {
-			dev_err(&adapter->netdev->dev,
-				   "Failed to enable MSI-X, error: %d\n", err);
-			return err;
-		} else if (err < vector_threshold) {
-			dev_info(&adapter->pdev->dev,
-				 "Number of MSI-Xs which can be allocated "
-				 "is lower than min threshold required.\n");
-			return -ENOSPC;
-		} else {
-			/* If fails to enable required number of MSI-x vectors
-			 * try enabling minimum number of vectors required.
-			 */
-			dev_err(&adapter->netdev->dev,
-				"Failed to enable %d MSI-X, trying %d instead\n",
-				    vectors, vector_threshold);
-			vectors = vector_threshold;
-		}
+	vector_threshold = VMXNET3_LINUX_MIN_MSIX_VECT;
+	if (vectors < vector_threshold)
+		return -EINVAL;
+
+	err = pci_msix_table_size(adapter->pdev);
+	if (err < 0)
+		goto err_msix;
+	if (err < vector_threshold) {
+		dev_info(&adapter->pdev->dev,
+			 "Number of MSI-X interrupts which can be allocated "
+			 "is lower than min threshold required.\n");
+		return -ENOSPC;
+	}
+	if (err < vectors) {
+		/*
+		 * If fails to enable required number of MSI-x vectors
+		 * try enabling minimum number of vectors required.
+		 */
+		dev_err(&adapter->netdev->dev,
+			"Failed to enable %d MSI-X, trying %d instead\n",
+			vectors, vector_threshold);
+		vectors = vector_threshold;
 	}
 
+	err = pci_enable_msix(adapter->pdev, adapter->intr.msix_entries,
+			      vectors);
+	if (err)
+		goto err_msix;
+
+	adapter->intr.num_intrs = vectors;
+	return 0;
+
+err_msix:
+	dev_err(&adapter->netdev->dev,
+		"Failed to enable MSI-X, error: %d\n", err);
 	return err;
 }
 
