@@ -1128,6 +1128,16 @@ struct msix_entry {
 
 
 #ifndef CONFIG_PCI_MSI
+int pci_get_msi_limit(struct pci_dev *dev, int nvec)
+{
+	return -1;
+}
+
+int pci_get_msix_limit(struct pci_dev *dev, int nvec)
+{
+	return -1;
+}
+
 static inline int pci_get_msi_cap(struct pci_dev *dev)
 {
 	return -1;
@@ -1168,6 +1178,8 @@ static inline int pci_msi_enabled(void)
 	return 0;
 }
 #else
+int pci_get_msi_limit(struct pci_dev *dev, int nvec);
+int pci_get_msix_limit(struct pci_dev *dev, int nvec);
 int pci_get_msi_cap(struct pci_dev *dev);
 int pci_enable_msi_block(struct pci_dev *dev, unsigned int nvec);
 void pci_msi_shutdown(struct pci_dev *dev);

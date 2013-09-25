@@ -53,6 +53,7 @@ struct msi_desc {
 /*
  * The arch hook for setup up msi irqs
  */
+int arch_get_msi_limit(struct pci_dev *dev, int nvec, int type);
 int arch_setup_msi_irq(struct pci_dev *dev, struct msi_desc *desc);
 void arch_teardown_msi_irq(unsigned int irq);
 int arch_setup_msi_irqs(struct pci_dev *dev, int nvec, int type);

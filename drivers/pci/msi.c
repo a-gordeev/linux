@@ -30,6 +30,21 @@ static int pci_msi_enable = 1;
 
 /* Arch hooks */
 
+#ifndef arch_get_msi_limit
+# define arch_get_msi_limit default_get_msi_limit
+# define HAVE_DEFAULT_GET_MSI_LIMIT
+#endif
+
+#ifdef HAVE_DEFAULT_GET_MSI_LIMIT
+int default_get_msi_limit(struct pci_dev *dev, int nvec, int type)
+{
+	if (type == PCI_CAP_ID_MSI)
+		return 1 << (PCI_MSI_FLAGS_QMASK >> 1);
+	else
+		return PCI_MSIX_FLAGS_QSIZE + 1;
+}
+#endif
+
 #ifndef arch_msi_check_device
 int arch_msi_check_device(struct pci_dev *dev, int nvec, int type)
 {
@@ -115,6 +130,20 @@ void default_restore_msi_irqs(struct pci_dev *dev, int irq)
 		write_msi_msg(irq, &entry->msg);
 }
 #endif
+
+int pci_get_msi_limit(struct pci_dev *dev, int nvec)
+{
+	if (!dev->msi_cap)
+		return -EINVAL;
+	return arch_get_msi_limit(dev, nvec, PCI_CAP_ID_MSI);
+}
+
+int pci_get_msix_limit(struct pci_dev *dev, int nvec)
+{
+	if (!dev->msix_cap)
+		return -EINVAL;
+	return arch_get_msi_limit(dev, nvec, PCI_CAP_ID_MSIX);
+}
 
 static void msi_set_enable(struct pci_dev *dev, int enable)
 {
