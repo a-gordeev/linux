@@ -114,9 +114,12 @@ extern int pci_domain_nr(struct pci_bus *bus);
 extern int pci_proc_domain(struct pci_bus *bus);
 
 /* MSI arch hooks */
+#define arch_get_msi_limit arch_get_msi_limit
 #define arch_setup_msi_irqs arch_setup_msi_irqs
 #define arch_teardown_msi_irqs arch_teardown_msi_irqs
 #define arch_msi_check_device arch_msi_check_device
+#define HAVE_DEFAULT_GET_MSI_LIMIT
+int default_get_msi_limit(struct pci_dev *dev, int nvec, int type);
 
 struct vm_area_struct;
 /* Map a range of PCI memory or I/O space for a device into user space */

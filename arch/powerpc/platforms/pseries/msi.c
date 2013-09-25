@@ -391,6 +391,11 @@ static void rtas_hack_32bit_msi_gen2(struct pci_dev *pdev)
 	pci_write_config_dword(pdev, pdev->msi_cap + PCI_MSI_ADDRESS_HI, 0);
 }
 
+static int rtas_get_msi_limit(struct pci_dev *pdev, int nvec, int type)
+{
+	return msi_quota_for_device(pdev, nvec);
+}
+
 static int rtas_setup_msi_irqs(struct pci_dev *pdev, int nvec_in, int type)
 {
 	struct pci_dn *pdn;
@@ -521,6 +526,7 @@ static int rtas_msi_init(void)
 	pr_debug("rtas_msi: Registering RTAS MSI callbacks.\n");
 
 	WARN_ON(ppc_md.setup_msi_irqs);
+	ppc_md.get_msi_limit = rtas_get_msi_limit;
 	ppc_md.setup_msi_irqs = rtas_setup_msi_irqs;
 	ppc_md.teardown_msi_irqs = rtas_teardown_msi_irqs;
 	ppc_md.msi_check_device = rtas_msi_check_device;

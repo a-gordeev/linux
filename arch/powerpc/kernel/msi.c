@@ -13,6 +13,16 @@
 
 #include <asm/machdep.h>
 
+int arch_get_msi_limit(struct pci_dev* dev, int nvec, int type)
+{
+	if (ppc_md.get_msi_limit) {
+		pr_debug("msi: Using platform limit check routine.\n");
+		return ppc_md.get_msi_limit(dev, nvec, type);
+	}
+
+	return default_get_msi_limit(dev, nvec, type);
+}
+
 int arch_msi_check_device(struct pci_dev* dev, int nvec, int type)
 {
 	if (!ppc_md.setup_msi_irqs || !ppc_md.teardown_msi_irqs) {

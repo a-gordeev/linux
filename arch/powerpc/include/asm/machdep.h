@@ -119,6 +119,8 @@ struct machdep_calls {
 	int		(*pci_setup_phb)(struct pci_controller *host);
 
 #ifdef CONFIG_PCI_MSI
+	int		(*get_msi_limit)(struct pci_dev* dev,
+					 int nvec, int type);
 	int		(*msi_check_device)(struct pci_dev* dev,
 					    int nvec, int type);
 	int		(*setup_msi_irqs)(struct pci_dev *dev,
