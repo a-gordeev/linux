@@ -410,6 +410,7 @@ static int virtblk_get_id(struct gendisk *disk, char *id_str)
 	struct virtio_blk *vblk = disk->private_data;
 	struct request *req;
 	struct bio *bio;
+	int err;
 
 	bio = bio_map_kern(vblk->disk->queue, id_str, VIRTIO_BLK_ID_BYTES,
 			   GFP_KERNEL);
@@ -423,7 +424,9 @@ static int virtblk_get_id(struct gendisk *disk, char *id_str)
 	}
 
 	req->cmd_type = REQ_TYPE_SPECIAL;
-	return blk_mq_execute_rq(vblk->disk->queue, req);
+	err = blk_execute_rq(vblk->disk->queue, vblk->disk, req, false);
+	blk_put_request(req);
+	return err;
 }
 
 static int virtblk_ioctl(struct block_device *bdev, fmode_t mode,
