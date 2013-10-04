@@ -158,7 +158,7 @@ static struct mtip_cmd *mtip_get_int_command(struct driver_data *dd)
 
 static void mtip_put_int_command(struct driver_data *dd, struct mtip_cmd *cmd)
 {
-	blk_mq_free_request(blk_mq_rq_from_pdu(cmd));
+	blk_put_request(blk_mq_rq_from_pdu(cmd));
 }
 
 /*
