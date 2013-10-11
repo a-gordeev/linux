@@ -555,7 +555,7 @@ err:
 	blk_queue_physical_block_size(nullb->q, bs);
 
 	size = gb * 1024 * 1024 * 1024ULL;
-	size = sector_div(size, bs);
+	sector_div(size, bs);
 	set_capacity(disk, size);
 
 	disk->flags |= GENHD_FL_EXT_DEVT;
