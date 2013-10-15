@@ -3990,6 +3990,7 @@ static int mtip_pci_probe(struct pci_dev *pdev,
 		my_node, pcibus_to_node(pdev->bus), dev_to_node(&pdev->dev),
 		cpu_to_node(smp_processor_id()), smp_processor_id());
 
+	mtip_mq_reg.numa_node = my_node;
 	dd = kzalloc_node(sizeof(struct driver_data), GFP_KERNEL, my_node);
 	if (dd == NULL) {
 		dev_err(&pdev->dev,
