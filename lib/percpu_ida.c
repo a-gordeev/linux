@@ -305,6 +305,11 @@ int __percpu_ida_init(struct percpu_ida *pool, unsigned long nr_tags,
 {
 	unsigned i, cpu, order;
 
+	if (batch_size > max_size)
+		return -ERANGE;
+	if (!batch_size)
+		return -EINVAL;
+
 	memset(pool, 0, sizeof(*pool));
 
 	init_waitqueue_head(&pool->wait);
