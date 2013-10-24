@@ -243,9 +243,8 @@ void percpu_ida_free(struct percpu_ida *pool, unsigned tag)
 		 */
 		smp_wmb();
 		wake_up = true;
-	} 
-
-	if (nr_free == pool->percpu_max_size) {
+	} else if ((nr_free == pool->percpu_max_size) &&
+		   (pool->percpu_max_size > 1)) {
 		spin_lock(&pool->lock);
 
 		/*
