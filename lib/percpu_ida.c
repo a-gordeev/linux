@@ -221,6 +221,7 @@ void percpu_ida_free(struct percpu_ida *pool, unsigned tag)
 	struct percpu_ida_cpu *tags;
 	unsigned long flags;
 	unsigned nr_free;
+	bool wake_up = false;
 
 	BUG_ON(tag >= pool->nr_tags);
 
@@ -234,9 +235,8 @@ void percpu_ida_free(struct percpu_ida *pool, unsigned tag)
 	spin_unlock(&tags->lock);
 
 	if (nr_free == 1) {
-		cpumask_set_cpu(smp_processor_id(),
-				&pool->cpus_have_tags);
-		wake_up(&pool->wait);
+		cpumask_set_cpu(smp_processor_id(), &pool->cpus_have_tags);
+		wake_up = true;
 	}
 
 	if (nr_free == pool->percpu_max_size) {
@@ -250,13 +250,15 @@ void percpu_ida_free(struct percpu_ida *pool, unsigned tag)
 			move_tags(pool->freelist, &pool->nr_free,
 				  tags->freelist, &tags->nr_free,
 				  pool->percpu_batch_size);
-
-			wake_up(&pool->wait);
+			wake_up = true;
 		}
 		spin_unlock(&pool->lock);
 	}
 
 	local_irq_restore(flags);
+
+	if (wake_up)
+		wake_up(&pool->wait);
 }
 EXPORT_SYMBOL_GPL(percpu_ida_free);
 
