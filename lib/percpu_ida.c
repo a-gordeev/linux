@@ -68,6 +68,11 @@ static inline void steal_tags(struct percpu_ida *pool,
 	unsigned cpus_have_tags, cpu = pool->cpu_last_stolen;
 	struct percpu_ida_cpu *remote;
 
+	/*
+	 * Pairs with smp_wmb() in percpu_ida_free()
+	 */
+	smp_rmb();
+
 	for (cpus_have_tags = cpumask_weight(&pool->cpus_have_tags);
 	     cpus_have_tags * pool->percpu_max_size > pool->nr_tags / 2;
 	     cpus_have_tags--) {
@@ -237,8 +242,11 @@ void percpu_ida_free(struct percpu_ida *pool, unsigned tag)
 	spin_unlock(&tags->lock);
 
 	if (nr_free == 1) {
-		cpumask_set_cpu(smp_processor_id(),
-				&pool->cpus_have_tags);
+		cpumask_set_cpu(smp_processor_id(), &pool->cpus_have_tags);
+		/*
+		 * Pairs with smp_rmb() in steal_tags()
+		 */
+		smp_wmb();
 		wake_up(&pool->wait);
 	}
 
