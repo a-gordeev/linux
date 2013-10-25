@@ -18,6 +18,7 @@ struct percpu_ida {
 	unsigned			nr_tags;
 	unsigned			percpu_max_size;
 	unsigned			percpu_batch_size;
+	unsigned			max_cached;
 
 	struct percpu_ida_cpu __percpu	*tag_cpu;
 
@@ -66,11 +67,11 @@ void percpu_ida_free(struct percpu_ida *pool, unsigned tag);
 
 void percpu_ida_destroy(struct percpu_ida *pool);
 int __percpu_ida_init(struct percpu_ida *pool, unsigned long nr_tags,
-	unsigned long max_size, unsigned long batch_size);
+	unsigned long max_size, unsigned long batch_size, unsigned max_cached);
 static inline int percpu_ida_init(struct percpu_ida *pool, unsigned long nr_tags)
 {
 	return __percpu_ida_init(pool, nr_tags, IDA_DEFAULT_PCPU_SIZE,
-		IDA_DEFAULT_PCPU_BATCH_MOVE);
+		IDA_DEFAULT_PCPU_BATCH_MOVE, nr_tags / 2);
 }
 
 typedef int (*percpu_ida_cb)(unsigned, void *);

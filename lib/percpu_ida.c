@@ -74,7 +74,7 @@ static inline void steal_tags(struct percpu_ida *pool,
 	smp_rmb();
 
 	for (cpus_have_tags = cpumask_weight(&pool->cpus_have_tags);
-	     cpus_have_tags * pool->percpu_max_size > pool->nr_tags / 2;
+	     cpus_have_tags * pool->percpu_max_size > pool->max_cached;
 	     cpus_have_tags--) {
 		cpu = cpumask_next(cpu, &pool->cpus_have_tags);
 
@@ -294,13 +294,15 @@ EXPORT_SYMBOL_GPL(percpu_ida_destroy);
  * performance, the workload should not span more cpus than nr_tags / 128.
  */
 int __percpu_ida_init(struct percpu_ida *pool, unsigned long nr_tags,
-	unsigned long max_size, unsigned long batch_size)
+	unsigned long max_size, unsigned long batch_size, unsigned max_cached)
 {
 	unsigned i, cpu, order;
 
 	if (batch_size > max_size)
 		return -ERANGE;
 	if (!batch_size)
+		return -EINVAL;
+	if (max_cached > nr_tags)
 		return -EINVAL;
 
 	memset(pool, 0, sizeof(*pool));
@@ -310,6 +312,7 @@ int __percpu_ida_init(struct percpu_ida *pool, unsigned long nr_tags,
 	pool->nr_tags = nr_tags;
 	pool->percpu_max_size = max_size;
 	pool->percpu_batch_size = batch_size;
+	pool->max_cached = max_cached;
 
 	/* Guard against overflow */
 	if (nr_tags > (unsigned) INT_MAX + 1) {
