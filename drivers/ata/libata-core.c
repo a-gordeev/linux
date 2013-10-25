@@ -5671,13 +5671,13 @@ struct ata_port *ata_port_alloc(struct ata_host *host)
 	if (!ap)
 		return NULL;
 
-	if (__percpu_ida_init(&ap->qc_tags,
-			      ATA_MAX_QUEUE - 1, 4, 2) < 0) {
+	if (__percpu_ida_init(&ap->qc_tags, ATA_MAX_QUEUE - 1, 4, 2,
+			      (ATA_MAX_QUEUE - 1) / 2) < 0) {
 		kfree(ap);
 		return NULL;
 	}
 
-	if (__percpu_ida_init(&ap->qc_internal, 1, 1, 1) < 0) {
+	if (__percpu_ida_init(&ap->qc_internal, 1, 1, 1, 1) < 0) {
 		percpu_ida_destroy(&ap->qc_tags);
 		kfree(ap);
 		return NULL;

@@ -145,10 +145,11 @@ struct blk_mq_tags *blk_mq_init_tags(unsigned int total_tags,
 	tags->nr_max_cache = nr_cache;
 	tags->nr_batch_move = max(1u, nr_cache / 2);
 
-	ret = __percpu_ida_init(&tags->free_tags, tags->nr_tags -
-				tags->nr_reserved_tags,
+	ret = __percpu_ida_init(&tags->free_tags,
+				tags->nr_tags - tags->nr_reserved_tags,
 				tags->nr_max_cache,
-				tags->nr_batch_move);
+				tags->nr_batch_move,
+				(tags->nr_tags - tags->nr_reserved_tags) / 2);
 	if (ret)
 		goto err_free_tags;
 
@@ -158,7 +159,7 @@ struct blk_mq_tags *blk_mq_init_tags(unsigned int total_tags,
 		 * no cached. It's fine reserved tags allocation is slow.
 		 */
 		ret = __percpu_ida_init(&tags->reserved_tags, reserved_tags,
-				1, 1);
+				1, 1, 0);
 		if (ret)
 			goto err_reserved_tags;
 	}
