@@ -1899,6 +1899,25 @@ hsw_get_event_constraints(struct cpu_hw_events *cpuc, struct perf_event *event)
 	return c;
 }
 
+void core_pmu_enable_hardirq(int irq)
+{
+	struct cpu_hw_events *cpuc = &__get_cpu_var(cpu_hw_events);
+	int idx;
+
+	for (idx = 0; idx < x86_pmu.num_counters; idx++) {
+		struct perf_event *event = cpuc->events[idx];
+
+		if (!test_bit(idx, cpuc->active_hardirq_mask) ||
+				cpuc->events[idx]->attr.exclude_host)
+			continue;
+		if (event->hardirq != irq)
+			continue;
+
+		__x86_pmu_enable_event(&event->hw,
+				       ARCH_PERFMON_EVENTSEL_ENABLE);
+	}
+}
+
 PMU_FORMAT_ATTR(event,	"config:0-7"	);
 PMU_FORMAT_ATTR(umask,	"config:8-15"	);
 PMU_FORMAT_ATTR(edge,	"config:18"	);
@@ -1931,8 +1950,8 @@ static __initconst const struct x86_pmu core_pmu = {
 	.handle_irq		= x86_pmu_handle_irq,
 	.disable_all		= x86_pmu_disable_all,
 	.enable_all		= core_pmu_enable_all,
-	.disable_hardirq	= x86_pmu_nop_hardirq_void_int,
-	.enable_hardirq		= x86_pmu_nop_hardirq_void_int,
+	.disable_hardirq	= x86_pmu_disable_hardirq,
+	.enable_hardirq		= core_pmu_enable_hardirq,
 	.enable			= core_pmu_enable_event,
 	.disable		= x86_pmu_disable_event,
 	.hw_config		= x86_pmu_hw_config,
