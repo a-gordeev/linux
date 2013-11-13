@@ -1143,6 +1143,24 @@ static void intel_pmu_enable_hardirq(int irq)
 		~cpuc->intel_ctrl_guest_mask) | hardirq_mask);
 }
 
+static void intel_pmu_disable_softirq(int vector)
+{
+	struct cpu_hw_events *cpuc = &__get_cpu_var(cpu_hw_events);
+	u64 softirq_mask = __get_intel_ctrl_softirq_mask(cpuc, vector);
+
+	wrmsrl(MSR_CORE_PERF_GLOBAL_CTRL,
+		x86_pmu.intel_ctrl & ~(cpuc->intel_ctrl_guest_mask | softirq_mask));
+}
+
+static void intel_pmu_enable_softirq(int vector)
+{
+	struct cpu_hw_events *cpuc = &__get_cpu_var(cpu_hw_events);
+	u64 softirq_mask = __get_intel_ctrl_softirq_mask(cpuc, vector);
+
+	wrmsrl(MSR_CORE_PERF_GLOBAL_CTRL,
+		(x86_pmu.intel_ctrl & ~cpuc->intel_ctrl_guest_mask) | softirq_mask);
+}
+
 /*
  * Workaround for:
  *   Intel Errata AAK100 (model 26)
@@ -2178,8 +2196,8 @@ static __initconst const struct x86_pmu intel_pmu = {
 	.enable_all		= intel_pmu_enable_all,
 	.disable_hardirq	= intel_pmu_disable_hardirq,
 	.enable_hardirq		= intel_pmu_enable_hardirq,
-	.disable_softirq	= x86_pmu_nop_softirq_void_int,
-	.enable_softirq		= x86_pmu_nop_softirq_void_int,
+	.disable_softirq	= intel_pmu_disable_softirq,
+	.enable_softirq		= intel_pmu_enable_softirq,
 	.enable			= intel_pmu_enable_event,
 	.disable		= intel_pmu_disable_event,
 	.hw_config		= intel_pmu_hw_config,
