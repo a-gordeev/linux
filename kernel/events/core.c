@@ -118,8 +118,9 @@ static int cpu_function_call(int cpu, int (*func) (void *info), void *info)
 }
 
 #define PERF_FLAG_ALL (PERF_FLAG_FD_NO_GROUP |\
-		       PERF_FLAG_FD_OUTPUT  |\
-		       PERF_FLAG_PID_CGROUP)
+		       PERF_FLAG_FD_OUTPUT |\
+		       PERF_FLAG_PID_CGROUP |\
+		       PERF_FLAG_PID_HARDIRQ)
 
 /*
  * branch priv levels that need permission checks
@@ -857,6 +858,20 @@ void perf_pmu_enable(struct pmu *pmu)
 	int *count = this_cpu_ptr(pmu->pmu_disable_count);
 	if (!--(*count))
 		pmu->pmu_enable(pmu);
+}
+
+void perf_pmu_disable_hardirq(struct pmu *pmu, int irq)
+{
+	int *count = this_cpu_ptr(pmu->pmu_hardirq_enable_count);
+	if (!--(*count))
+		pmu->pmu_disable_hardirq(pmu, irq);
+}
+
+void perf_pmu_enable_hardirq(struct pmu *pmu, int irq)
+{
+	int *count = this_cpu_ptr(pmu->pmu_hardirq_enable_count);
+	if (!(*count)++)
+		pmu->pmu_enable_hardirq(pmu, irq);
 }
 
 static DEFINE_PER_CPU(struct list_head, rotation_list);
@@ -6242,6 +6257,10 @@ static void perf_pmu_nop_void(struct pmu *pmu)
 {
 }
 
+static void perf_pmu_nop_void_int(struct pmu *pmu, int arg)
+{
+}
+
 static int perf_pmu_nop_int(struct pmu *pmu)
 {
 	return 0;
@@ -6435,6 +6454,9 @@ int perf_pmu_register(struct pmu *pmu, const char *name, int type)
 	pmu->pmu_disable_count = alloc_percpu(int);
 	if (!pmu->pmu_disable_count)
 		goto unlock;
+	pmu->pmu_hardirq_enable_count = alloc_percpu(int);
+	if (!pmu->pmu_hardirq_enable_count)
+		goto free_pdc;
 
 	pmu->type = -1;
 	if (!name)
@@ -6445,7 +6467,7 @@ int perf_pmu_register(struct pmu *pmu, const char *name, int type)
 		type = idr_alloc(&pmu_idr, pmu, PERF_TYPE_MAX, 0, GFP_KERNEL);
 		if (type < 0) {
 			ret = type;
-			goto free_pdc;
+			goto free_peic;
 		}
 	}
 	pmu->type = type;
@@ -6505,6 +6527,11 @@ got_cpu_context:
 		pmu->pmu_disable = perf_pmu_nop_void;
 	}
 
+	if (!pmu->pmu_enable_hardirq) {
+		pmu->pmu_enable_hardirq  = perf_pmu_nop_void_int;
+		pmu->pmu_disable_hardirq = perf_pmu_nop_void_int;
+	}
+
 	if (!pmu->event_idx)
 		pmu->event_idx = perf_event_idx_default;
 
@@ -6522,6 +6549,9 @@ free_dev:
 free_idr:
 	if (pmu->type >= PERF_TYPE_MAX)
 		idr_remove(&pmu_idr, pmu->type);
+
+free_peic:
+	free_percpu(pmu->pmu_hardirq_enable_count);
 
 free_pdc:
 	free_percpu(pmu->pmu_disable_count);
@@ -6541,6 +6571,7 @@ void perf_pmu_unregister(struct pmu *pmu)
 	synchronize_srcu(&pmus_srcu);
 	synchronize_rcu();
 
+	free_percpu(pmu->pmu_hardirq_enable_count);
 	free_percpu(pmu->pmu_disable_count);
 	if (pmu->type >= PERF_TYPE_MAX)
 		idr_remove(&pmu_idr, pmu->type);
@@ -6628,7 +6659,7 @@ static void account_event(struct perf_event *event)
  * Allocate and initialize a event structure
  */
 static struct perf_event *
-perf_event_alloc(struct perf_event_attr *attr, int cpu,
+perf_event_alloc(struct perf_event_attr *attr, int cpu, int irq,
 		 struct task_struct *task,
 		 struct perf_event *group_leader,
 		 struct perf_event *parent_event,
@@ -6641,7 +6672,7 @@ perf_event_alloc(struct perf_event_attr *attr, int cpu,
 	long err = -EINVAL;
 
 	if ((unsigned)cpu >= nr_cpu_ids) {
-		if (!task || cpu != -1)
+		if (!task || cpu != -1 || irq < 0)
 			return ERR_PTR(-EINVAL);
 	}
 
@@ -6662,6 +6693,7 @@ perf_event_alloc(struct perf_event_attr *attr, int cpu,
 	INIT_LIST_HEAD(&event->group_entry);
 	INIT_LIST_HEAD(&event->event_entry);
 	INIT_LIST_HEAD(&event->sibling_list);
+	INIT_LIST_HEAD(&event->hardirq_list);
 	INIT_LIST_HEAD(&event->rb_entry);
 
 	init_waitqueue_head(&event->waitq);
@@ -6671,6 +6703,7 @@ perf_event_alloc(struct perf_event_attr *attr, int cpu,
 
 	atomic_long_set(&event->refcount, 1);
 	event->cpu		= cpu;
+	event->hardirq		= irq;
 	event->attr		= *attr;
 	event->group_leader	= group_leader;
 	event->pmu		= NULL;
@@ -6970,12 +7003,34 @@ SYSCALL_DEFINE5(perf_event_open,
 	struct fd group = {NULL, 0};
 	struct task_struct *task = NULL;
 	struct pmu *pmu;
+	int irq = -1;
 	int event_fd;
 	int move_group = 0;
 	int err;
 
 	/* for future expandability... */
 	if (flags & ~PERF_FLAG_ALL)
+		return -EINVAL;
+
+	if ((flags & (PERF_FLAG_PID_CGROUP | PERF_FLAG_PID_HARDIRQ)) ==
+	    (PERF_FLAG_PID_CGROUP | PERF_FLAG_PID_HARDIRQ))
+		return -EINVAL;
+
+	/*
+	 * In irq mode, the pid argument is used to pass irq number.
+	 */
+	if (flags & PERF_FLAG_PID_HARDIRQ) {
+		irq = pid;
+		pid = -1;
+	}
+
+	/*
+	 * In cgroup mode, the pid argument is used to pass the fd
+	 * opened to the cgroup directory in cgroupfs. The cpu argument
+	 * designates the cpu on which to monitor threads from that
+	 * cgroup.
+	 */
+	if ((flags & PERF_FLAG_PID_CGROUP) && (pid == -1 || cpu == -1))
 		return -EINVAL;
 
 	err = perf_copy_attr(attr_uptr, &attr);
@@ -6991,15 +7046,6 @@ SYSCALL_DEFINE5(perf_event_open,
 		if (attr.sample_freq > sysctl_perf_event_sample_rate)
 			return -EINVAL;
 	}
-
-	/*
-	 * In cgroup mode, the pid argument is used to pass the fd
-	 * opened to the cgroup directory in cgroupfs. The cpu argument
-	 * designates the cpu on which to monitor threads from that
-	 * cgroup.
-	 */
-	if ((flags & PERF_FLAG_PID_CGROUP) && (pid == -1 || cpu == -1))
-		return -EINVAL;
 
 	event_fd = get_unused_fd();
 	if (event_fd < 0)
@@ -7026,7 +7072,7 @@ SYSCALL_DEFINE5(perf_event_open,
 
 	get_online_cpus();
 
-	event = perf_event_alloc(&attr, cpu, task, group_leader, NULL,
+	event = perf_event_alloc(&attr, cpu, irq, task, group_leader, NULL,
 				 NULL, NULL);
 	if (IS_ERR(event)) {
 		err = PTR_ERR(event);
@@ -7230,7 +7276,7 @@ perf_event_create_kernel_counter(struct perf_event_attr *attr, int cpu,
 	 * Get the target context (task or percpu):
 	 */
 
-	event = perf_event_alloc(attr, cpu, task, NULL, NULL,
+	event = perf_event_alloc(attr, cpu, -1, task, NULL, NULL,
 				 overflow_handler, context);
 	if (IS_ERR(event)) {
 		err = PTR_ERR(event);
@@ -7547,6 +7593,7 @@ inherit_event(struct perf_event *parent_event,
 
 	child_event = perf_event_alloc(&parent_event->attr,
 					   parent_event->cpu,
+					   parent_event->hardirq,
 					   child,
 					   group_leader, parent_event,
 				           NULL, NULL);
