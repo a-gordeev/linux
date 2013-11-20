@@ -12,6 +12,7 @@ struct irq_affinity_notify;
 struct proc_dir_entry;
 struct module;
 struct irq_desc;
+struct hardirq_events;
 
 /**
  * struct irq_desc - interrupt descriptor
@@ -68,6 +69,9 @@ struct irq_desc {
 	struct proc_dir_entry	*dir;
 #endif
 	int			parent_irq;
+#ifdef CONFIG_PERF_EVENTS
+	struct hardirq_events __percpu **events;
+#endif
 	struct module		*owner;
 	const char		*name;
 } ____cacheline_internodealigned_in_smp;

@@ -301,8 +301,9 @@ struct perf_event_attr {
 				exclude_callchain_kernel : 1, /* exclude kernel callchains */
 				exclude_callchain_user   : 1, /* exclude user callchains */
 				mmap2          :  1, /* include mmap with inode data     */
+				hardirq        :  1,
 
-				__reserved_1   : 40;
+				__reserved_1   : 39;
 
 	union {
 		__u32		wakeup_events;	  /* wakeup every n events */
@@ -348,6 +349,7 @@ struct perf_event_attr {
 #define PERF_EVENT_IOC_SET_OUTPUT	_IO ('$', 5)
 #define PERF_EVENT_IOC_SET_FILTER	_IOW('$', 6, char *)
 #define PERF_EVENT_IOC_ID		_IOR('$', 7, __u64 *)
+#define PERF_EVENT_IOC_SET_HARDIRQ	_IOR('$', 8, __u64 *)
 
 enum perf_event_ioc_flags {
 	PERF_IOC_FLAG_GROUP		= 1U << 0,
@@ -724,6 +726,7 @@ enum perf_callchain_context {
 #define PERF_FLAG_FD_NO_GROUP		(1U << 0)
 #define PERF_FLAG_FD_OUTPUT		(1U << 1)
 #define PERF_FLAG_PID_CGROUP		(1U << 2) /* pid=cgroup id, per-cpu mode only */
+#define PERF_FLAG_PID_HARDIRQ		(1U << 3) /* pid=irq number */
 
 union perf_mem_data_src {
 	__u64 val;
@@ -810,6 +813,16 @@ struct perf_branch_entry {
 		in_tx:1,    /* in transaction */
 		abort:1,    /* transaction abort */
 		reserved:60;
+};
+
+struct perf_hardirq_disp {
+	__s32				irq_nr;
+	__u64				actions;
+};
+
+struct perf_hardirq_event_disp {
+	__s32				nr_disp;	/* everything if <0 */
+	struct perf_hardirq_disp	disp[0];
 };
 
 #endif /* _UAPI_LINUX_PERF_EVENT_H */

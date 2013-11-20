@@ -215,6 +215,12 @@ struct pmu {
 	void (*stop)			(struct perf_event *event, int flags);
 
 	/*
+	 * Start/Stop hardware interrupt context counters present on the PMU.
+	 */
+	void (*start_hardirq)		(struct perf_event *events[], int count); /* optional */
+	void (*stop_hardirq)		(struct perf_event *events[], int count); /* optional */
+
+	/*
 	 * Updates the counter value of the event.
 	 */
 	void (*read)			(struct perf_event *event);
@@ -311,6 +317,11 @@ struct perf_event {
 	 */
 	struct list_head		group_entry;
 	struct list_head		sibling_list;
+
+	/*
+	 * List of hardware interrupt context numbers and actions
+	 */
+	struct list_head		hardirq_list;
 
 	/*
 	 * We need storage to track the entries in perf_pmu_migrate_context; we
@@ -528,6 +539,12 @@ struct perf_output_handle {
 	int				page;
 };
 
+struct perf_hardirq_param {
+	struct list_head	list;
+	int			irq;
+	unsigned long		mask;
+};
+
 #ifdef CONFIG_PERF_EVENTS
 
 extern int perf_pmu_register(struct pmu *pmu, const char *name, int type);
@@ -633,6 +650,11 @@ static inline bool is_sampling_event(struct perf_event *event)
 static inline int is_software_event(struct perf_event *event)
 {
 	return event->pmu->task_ctx_nr == perf_sw_context;
+}
+
+static inline bool is_hardirq_event(struct perf_event *event)
+{
+	return event->attr.hardirq != 0;
 }
 
 extern struct static_key perf_swevent_enabled[PERF_COUNT_SW_MAX];
@@ -772,6 +794,8 @@ extern void perf_event_enable(struct perf_event *event);
 extern void perf_event_disable(struct perf_event *event);
 extern int __perf_event_disable(void *info);
 extern void perf_event_task_tick(void);
+extern int perf_event_init_hardirq(void *info);
+extern int perf_event_term_hardirq(void *info);
 #else
 static inline void
 perf_event_task_sched_in(struct task_struct *prev,

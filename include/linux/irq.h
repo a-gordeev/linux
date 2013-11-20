@@ -632,6 +632,16 @@ static inline int irq_reserve_irq(unsigned int irq)
 # define irq_reg_readl(addr)		readl(addr)
 #endif
 
+#ifdef CONFIG_PERF_EVENTS
+extern void perf_start_hardirq_events(struct irq_desc *desc, int action_nr);
+extern void perf_stop_hardirq_events(struct irq_desc *desc, int action_nr);
+#else
+static inline void
+perf_start_hardirq_events(struct irq_desc *desc, int action_nr)	{ }
+static inline void
+perf_stop_hardirq_events(struct irq_desc *desc, int action_nr)	{ }
+#endif
+
 /**
  * struct irq_chip_regs - register offsets for struct irq_gci
  * @enable:	Enable register offset to reg_base

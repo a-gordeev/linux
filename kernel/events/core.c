@@ -118,8 +118,9 @@ static int cpu_function_call(int cpu, int (*func) (void *info), void *info)
 }
 
 #define PERF_FLAG_ALL (PERF_FLAG_FD_NO_GROUP |\
-		       PERF_FLAG_FD_OUTPUT  |\
-		       PERF_FLAG_PID_CGROUP)
+		       PERF_FLAG_FD_OUTPUT |\
+		       PERF_FLAG_PID_CGROUP |\
+		       PERF_FLAG_PID_HARDIRQ)
 
 /*
  * branch priv levels that need permission checks
@@ -3213,9 +3214,45 @@ static void __free_event(struct perf_event *event)
 
 	call_rcu(&event->rcu_head, free_event_rcu);
 }
+
+static int __perf_hardirq_add_disp(struct perf_event *event,
+				   struct perf_hardirq_disp *disp)
+{
+	struct perf_hardirq_param *param = kmalloc_node(sizeof(*param),
+		GFP_KERNEL, cpu_to_node(event->cpu));
+	if (!param)
+		return -ENOMEM;
+
+	param->irq = disp->irq_nr;
+
+	if (disp->actions == (typeof(disp->actions))-1)
+		param->mask = -1;
+	else
+		param->mask = disp->actions;
+
+	list_add(&param->list, &event->hardirq_list);
+
+	return 0;
+}
+
+static void __perf_hardirq_del_disps(struct perf_event *event)
+{
+	struct perf_hardirq_param *param;
+	struct list_head *pos, *next;
+
+	list_for_each_safe(pos, next, &event->hardirq_list) {
+		param = list_entry(pos, typeof(*param), list);
+		list_del(pos);
+		kfree(param);
+	}
+}
+
 static void free_event(struct perf_event *event)
 {
 	irq_work_sync(&event->pending);
+
+	cpu_function_call(event->cpu, perf_event_term_hardirq, event);
+	__perf_hardirq_del_disps(event);
 
 	unaccount_event(event);
 
@@ -3590,6 +3627,7 @@ static inline int perf_fget_light(int fd, struct fd *p)
 static int perf_event_set_output(struct perf_event *event,
 				 struct perf_event *output_event);
 static int perf_event_set_filter(struct perf_event *event, void __user *arg);
+static int perf_event_set_hardirq(struct perf_event *event, void __user *arg);
 
 static long perf_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
@@ -3643,6 +3681,9 @@ static long perf_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 	case PERF_EVENT_IOC_SET_FILTER:
 		return perf_event_set_filter(event, (void __user *)arg);
+
+	case PERF_EVENT_IOC_SET_HARDIRQ:
+		return perf_event_set_hardirq(event, (void __user *)arg);
 
 	default:
 		return -ENOTTY;
@@ -6248,6 +6289,10 @@ static void perf_pmu_nop_void(struct pmu *pmu)
 {
 }
 
+static void perf_pmu_nop_void_arg1_arg2(struct perf_event *events[], int count)
+{
+}
+
 static int perf_pmu_nop_int(struct pmu *pmu)
 {
 	return 0;
@@ -6511,6 +6556,11 @@ got_cpu_context:
 		pmu->pmu_disable = perf_pmu_nop_void;
 	}
 
+	if (!pmu->start_hardirq) {
+		pmu->start_hardirq = perf_pmu_nop_void_arg1_arg2;
+		pmu->stop_hardirq = perf_pmu_nop_void_arg1_arg2;
+	}
+
 	if (!pmu->event_idx)
 		pmu->event_idx = perf_event_idx_default;
 
@@ -6668,6 +6718,7 @@ perf_event_alloc(struct perf_event_attr *attr, int cpu,
 	INIT_LIST_HEAD(&event->group_entry);
 	INIT_LIST_HEAD(&event->event_entry);
 	INIT_LIST_HEAD(&event->sibling_list);
+	INIT_LIST_HEAD(&event->hardirq_list);
 	INIT_LIST_HEAD(&event->rb_entry);
 	INIT_LIST_HEAD(&event->active_entry);
 
@@ -6977,12 +7028,34 @@ SYSCALL_DEFINE5(perf_event_open,
 	struct fd group = {NULL, 0};
 	struct task_struct *task = NULL;
 	struct pmu *pmu;
+	int hardirq = -1;
 	int event_fd;
 	int move_group = 0;
 	int err;
 
 	/* for future expandability... */
 	if (flags & ~PERF_FLAG_ALL)
+		return -EINVAL;
+
+	if ((flags & (PERF_FLAG_PID_CGROUP | PERF_FLAG_PID_HARDIRQ)) ==
+	    (PERF_FLAG_PID_CGROUP | PERF_FLAG_PID_HARDIRQ))
+		return -EINVAL;
+
+	/*
+	 * In irq mode, the pid argument is used to pass irq number.
+	 */
+	if (flags & PERF_FLAG_PID_HARDIRQ) {
+		hardirq = pid;
+		pid = -1;
+	}
+
+	/*
+	 * In cgroup mode, the pid argument is used to pass the fd
+	 * opened to the cgroup directory in cgroupfs. The cpu argument
+	 * designates the cpu on which to monitor threads from that
+	 * cgroup.
+	 */
+	if ((flags & PERF_FLAG_PID_CGROUP) && (pid == -1 || cpu == -1))
 		return -EINVAL;
 
 	err = perf_copy_attr(attr_uptr, &attr);
@@ -6998,15 +7071,6 @@ SYSCALL_DEFINE5(perf_event_open,
 		if (attr.sample_freq > sysctl_perf_event_sample_rate)
 			return -EINVAL;
 	}
-
-	/*
-	 * In cgroup mode, the pid argument is used to pass the fd
-	 * opened to the cgroup directory in cgroupfs. The cpu argument
-	 * designates the cpu on which to monitor threads from that
-	 * cgroup.
-	 */
-	if ((flags & PERF_FLAG_PID_CGROUP) && (pid == -1 || cpu == -1))
-		return -EINVAL;
 
 	event_fd = get_unused_fd();
 	if (event_fd < 0)
@@ -7873,6 +7937,96 @@ static void perf_event_exit_cpu(int cpu)
 #else
 static inline void perf_event_exit_cpu(int cpu) { }
 #endif
+
+static int __perf_hardirq_check_disp(struct perf_hardirq_disp *disp)
+{
+	struct irq_desc *desc = irq_to_desc(disp->irq_nr);
+	struct irqaction *action;
+	int nr_actions = 0;
+	unsigned long flags;
+
+	if (!desc)
+		return -ENOENT;
+
+	if (!disp->actions)
+		return -EINVAL;
+
+	/*
+	 * -1 means all actions
+	 */
+	if (disp->actions == (typeof(disp->actions))-1)
+		return 0;
+
+	/*
+	 * Check actions existence
+	 */
+	raw_spin_lock_irqsave(&desc->lock, flags);
+	for (action = desc->action; action; action = action->next)
+		nr_actions++;
+	raw_spin_unlock_irqrestore(&desc->lock, flags);
+
+	if (!nr_actions)
+		return -ENOENT;
+
+	if (__fls(disp->actions) + 1 > nr_actions)
+		return -EINVAL;
+
+	return 0;
+}
+
+static int perf_event_set_hardirq(struct perf_event *event, void __user *arg)
+{
+	struct perf_hardirq_event_disp edisp;
+	struct perf_hardirq_disp idisp;
+	struct perf_hardirq_disp __user *user;
+	struct perf_hardirq_param *param;
+	int ret = 0;
+	int i;
+
+	if (copy_from_user(&edisp, arg, sizeof(edisp.nr_disp)))
+		return -EFAULT;
+
+	/*
+	 * TODO Run counters for all actions on all IRQs
+	 */
+	if (edisp.nr_disp == (typeof(edisp.nr_disp))-1)
+		return -EINVAL;
+
+	user = arg + offsetof(typeof(edisp), disp);
+	for (i = 0; i < edisp.nr_disp; i++) {
+		if (copy_from_user(&idisp, &user[i], sizeof(idisp))) {
+			ret = -EFAULT;
+			goto err;
+		}
+
+		/*
+		 * Multiple entries against one IRQ are not allowed
+		 */
+		list_for_each_entry(param, &event->hardirq_list, list) {
+			if (param->irq == idisp.irq_nr)
+				return -EINVAL;
+		}
+
+		ret = __perf_hardirq_check_disp(&idisp);
+		if (ret)
+			goto err;
+
+		ret = __perf_hardirq_add_disp(event, &idisp);
+		if (ret)
+			goto err;
+	}
+
+	ret = cpu_function_call(event->cpu, perf_event_init_hardirq, event);
+	if (ret)
+		goto err;
+
+	return 0;
+
+err:
+	__perf_hardirq_del_disps(event);
+
+	return ret;
+}
 
 static int
 perf_reboot(struct notifier_block *notifier, unsigned long val, void *v)

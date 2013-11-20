@@ -133,13 +133,17 @@ irqreturn_t
 handle_irq_event_percpu(struct irq_desc *desc, struct irqaction *action)
 {
 	irqreturn_t retval = IRQ_NONE;
-	unsigned int flags = 0, irq = desc->irq_data.irq;
+	unsigned int flags = 0, irq = desc->irq_data.irq, action_nr = 0;
 
 	do {
 		irqreturn_t res;
 
 		trace_irq_handler_entry(irq, action);
+		perf_start_hardirq_events(desc, action_nr);
+
 		res = action->handler(irq, action->dev_id);
+
+		perf_stop_hardirq_events(desc, action_nr);
 		trace_irq_handler_exit(irq, action, res);
 
 		if (WARN_ONCE(!irqs_disabled(),"irq %u handler %pF enabled interrupts\n",
@@ -170,6 +174,7 @@ handle_irq_event_percpu(struct irq_desc *desc, struct irqaction *action)
 
 		retval |= res;
 		action = action->next;
+		action_nr++;
 	} while (action);
 
 	add_interrupt_randomness(irq, flags);
