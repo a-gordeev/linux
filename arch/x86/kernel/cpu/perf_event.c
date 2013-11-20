@@ -497,15 +497,23 @@ void x86_pmu_disable_all(void)
 	int idx;
 
 	for (idx = 0; idx < x86_pmu.num_counters; idx++) {
-		u64 val;
-
 		if (!test_bit(idx, cpuc->active_mask))
 			continue;
-		rdmsrl(x86_pmu_config_addr(idx), val);
-		if (!(val & ARCH_PERFMON_EVENTSEL_ENABLE))
+		__x86_pmu_disable_event(idx, ARCH_PERFMON_EVENTSEL_ENABLE);
+	}
+}
+
+void x86_pmu_disable_hardirq(int irq)
+{
+	struct cpu_hw_events *cpuc = &__get_cpu_var(cpu_hw_events);
+	int idx;
+
+	for (idx = 0; idx < x86_pmu.num_counters; idx++) {
+		if (!test_bit(idx, cpuc->active_hardirq_mask))
 			continue;
-		val &= ~ARCH_PERFMON_EVENTSEL_ENABLE;
-		wrmsrl(x86_pmu_config_addr(idx), val);
+		if (cpuc->events[idx]->hardirq != irq)
+			continue;
+		__x86_pmu_disable_event(idx, ARCH_PERFMON_EVENTSEL_ENABLE);
 	}
 }
 
@@ -526,6 +534,11 @@ static void x86_pmu_disable(struct pmu *pmu)
 	x86_pmu.disable_all();
 }
 
+static void x86_pmu__disable_hardirq(struct pmu *pmu, int irq)
+{
+	x86_pmu.disable_hardirq(irq);
+}
+
 void x86_pmu_enable_all(int added)
 {
 	struct cpu_hw_events *cpuc = &__get_cpu_var(cpu_hw_events);
@@ -538,6 +551,28 @@ void x86_pmu_enable_all(int added)
 			continue;
 
 		__x86_pmu_enable_event(hwc, ARCH_PERFMON_EVENTSEL_ENABLE);
+	}
+}
+
+void x86_pmu_nop_hardirq_void_int(int irq)
+{
+}
+
+void x86_pmu_enable_hardirq(int irq)
+{
+	struct cpu_hw_events *cpuc = &__get_cpu_var(cpu_hw_events);
+	int idx;
+
+	for (idx = 0; idx < x86_pmu.num_counters; idx++) {
+		struct perf_event *event = cpuc->events[idx];
+
+		if (!test_bit(idx, cpuc->active_hardirq_mask))
+			continue;
+		if (event->hardirq != irq)
+			continue;
+
+		__x86_pmu_enable_event(&event->hw,
+				       ARCH_PERFMON_EVENTSEL_ENABLE);
 	}
 }
 
@@ -942,6 +977,11 @@ static void x86_pmu_enable(struct pmu *pmu)
 	x86_pmu.enable_all(added);
 }
 
+static void x86_pmu__enable_hardirq(struct pmu *pmu, int irq)
+{
+	x86_pmu.enable_hardirq(irq);
+}
+
 static DEFINE_PER_CPU(u64 [X86_PMC_IDX_MAX], pmc_prev_left);
 
 /*
@@ -1087,7 +1127,12 @@ static void x86_pmu_start(struct perf_event *event, int flags)
 	event->hw.state = 0;
 
 	cpuc->events[idx] = event;
-	__set_bit(idx, cpuc->active_mask);
+	if (unlikely(is_hardirq_event(event))) {
+		__set_bit(idx, cpuc->active_hardirq_mask);
+		perf_event_hardirq_add(event);
+	} else {
+		__set_bit(idx, cpuc->active_mask);
+	}
 	__set_bit(idx, cpuc->running);
 	x86_pmu.enable(event);
 	perf_event_update_userpage(event);
@@ -1123,7 +1168,8 @@ void perf_event_print_debug(void)
 		pr_info("CPU#%d: fixed:      %016llx\n", cpu, fixed);
 		pr_info("CPU#%d: pebs:       %016llx\n", cpu, pebs);
 	}
-	pr_info("CPU#%d: active:     %016llx\n", cpu, *(u64 *)cpuc->active_mask);
+	pr_info("CPU#%d: active:             %016llx\n", cpu, *(u64 *)cpuc->active_mask);
+	pr_info("CPU#%d: active hardirq:     %016llx\n", cpu, *(u64 *)cpuc->active_hardirq_mask);
 
 	for (idx = 0; idx < x86_pmu.num_counters; idx++) {
 		rdmsrl(x86_pmu_config_addr(idx), pmc_ctrl);
@@ -1152,8 +1198,11 @@ void x86_pmu_stop(struct perf_event *event, int flags)
 	struct cpu_hw_events *cpuc = &__get_cpu_var(cpu_hw_events);
 	struct hw_perf_event *hwc = &event->hw;
 
-	if (__test_and_clear_bit(hwc->idx, cpuc->active_mask)) {
+	if (__test_and_clear_bit(hwc->idx, cpuc->active_mask) ||
+	    __test_and_clear_bit(hwc->idx, cpuc->active_hardirq_mask)) {
 		x86_pmu.disable(event);
+		if (unlikely(is_hardirq_event(event)))
+			perf_event_hardirq_del(event);
 		cpuc->events[hwc->idx] = NULL;
 		WARN_ON_ONCE(hwc->state & PERF_HES_STOPPED);
 		hwc->state |= PERF_HES_STOPPED;
@@ -1226,7 +1275,8 @@ int x86_pmu_handle_irq(struct pt_regs *regs)
 	apic_write(APIC_LVTPC, APIC_DM_NMI);
 
 	for (idx = 0; idx < x86_pmu.num_counters; idx++) {
-		if (!test_bit(idx, cpuc->active_mask)) {
+		if (!test_bit(idx, cpuc->active_mask) &&
+		    !test_bit(idx, cpuc->active_hardirq_mask)) {
 			/*
 			 * Though we deactivated the counter some cpus
 			 * might still deliver spurious interrupts still
@@ -1862,6 +1912,9 @@ EXPORT_SYMBOL_GPL(perf_check_microcode);
 static struct pmu pmu = {
 	.pmu_enable		= x86_pmu_enable,
 	.pmu_disable		= x86_pmu_disable,
+
+	.pmu_enable_hardirq	= x86_pmu__enable_hardirq,
+	.pmu_disable_hardirq	= x86_pmu__disable_hardirq,
 
 	.attr_groups		= x86_pmu_attr_groups,
 

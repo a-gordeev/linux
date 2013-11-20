@@ -860,6 +860,10 @@ void perf_pmu_enable(struct pmu *pmu)
 		pmu->pmu_enable(pmu);
 }
 
+/*
+ * FIXME Make perf_pmu_disable_hardirq() per-irq based
+ * rather than a total counter
+ */
 void perf_pmu_disable_hardirq(struct pmu *pmu, int irq)
 {
 	int *count = this_cpu_ptr(pmu->pmu_hardirq_enable_count);
@@ -867,6 +871,10 @@ void perf_pmu_disable_hardirq(struct pmu *pmu, int irq)
 		pmu->pmu_disable_hardirq(pmu, irq);
 }
 
+/*
+ * FIXME Make perf_pmu_enable_hardirq() per-irq based
+ * rather than a total counter
+ */
 void perf_pmu_enable_hardirq(struct pmu *pmu, int irq)
 {
 	int *count = this_cpu_ptr(pmu->pmu_hardirq_enable_count);
