@@ -179,6 +179,7 @@ struct pmu {
 
 	int * __percpu			pmu_disable_count;
 	int * __percpu			pmu_hardirq_enable_count;/* FIXME */
+	int * __percpu			pmu_softirq_enable_count;/* FIXME */
 	struct perf_cpu_context * __percpu pmu_cpu_context;
 	int				task_ctx_nr;
 	int				hrtimer_interval_ms;
@@ -192,6 +193,9 @@ struct pmu {
 
 	void (*pmu_enable_hardirq)	(struct pmu *pmu, int irq); /* opt. */
 	void (*pmu_disable_hardirq)	(struct pmu *pmu, int irq); /* opt. */
+
+	void (*pmu_enable_softirq)	(struct pmu *pmu, int vec); /* opt. */
+	void (*pmu_disable_softirq)	(struct pmu *pmu, int vec); /* opt. */
 
 	/*
 	 * Try and initialize the event for this PMU.
@@ -323,7 +327,10 @@ struct perf_event {
 	 */
 	struct list_head		migrate_entry;
 
-	struct list_head		hardirq_list;
+	union {
+		struct list_head	hardirq_list;
+		struct list_head	softirq_list;
+	};
 	struct hlist_node		hlist_entry;
 	int				nr_siblings;
 	int				group_flags;
@@ -397,6 +404,7 @@ struct perf_event {
 	int				oncpu;
 	int				cpu;
 	int				hardirq;
+	int				softirq;
 
 	struct list_head		owner_entry;
 	struct task_struct		*owner;
@@ -551,6 +559,8 @@ extern void perf_pmu_disable(struct pmu *pmu);
 extern void perf_pmu_enable(struct pmu *pmu);
 extern void perf_pmu_disable_hardirq(struct pmu *pmu, int irq);
 extern void perf_pmu_enable_hardirq(struct pmu *pmu, int irq);
+extern void perf_pmu_disable_softirq(struct pmu *pmu, int vector);
+extern void perf_pmu_enable_softirq(struct pmu *pmu, int vector);
 extern int perf_event_task_disable(void);
 extern int perf_event_task_enable(void);
 extern int perf_event_refresh(struct perf_event *event, int refresh);
@@ -643,6 +653,11 @@ static inline int is_software_event(struct perf_event *event)
 static inline bool is_hardirq_event(struct perf_event *event)
 {
 	return event->hardirq >= 0;
+}
+
+static inline bool is_softirq_event(struct perf_event *event)
+{
+	return event->softirq >= 0;
 }
 
 extern struct static_key perf_swevent_enabled[PERF_COUNT_SW_MAX];
@@ -784,6 +799,8 @@ extern int __perf_event_disable(void *info);
 extern void perf_event_task_tick(void);
 extern int perf_event_hardirq_add(struct perf_event *event);
 extern int perf_event_hardirq_del(struct perf_event *event);
+extern int perf_event_softirq_add(struct perf_event *event);
+extern int perf_event_softirq_del(struct perf_event *event);
 #else
 static inline void
 perf_event_task_sched_in(struct task_struct *prev,
@@ -826,6 +843,8 @@ static inline int __perf_event_disable(void *info)			{ return -1; }
 static inline void perf_event_task_tick(void)				{ }
 extern inline int perf_event_hardirq_add(struct perf_event *event)	{ return -1; }
 extern inline int perf_event_hardirq_del(struct perf_event *event)	{ return -1; }
+extern inline int perf_event_softirq_add(struct perf_event *event)	{ return -1; }
+extern inline int perf_event_softirq_del(struct perf_event *event)	{ return -1; }
 #endif
 
 #if defined(CONFIG_PERF_EVENTS) && defined(CONFIG_NO_HZ_FULL)

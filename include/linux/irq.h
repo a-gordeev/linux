@@ -630,9 +630,13 @@ static inline int irq_reserve_irq(unsigned int irq)
 #ifdef CONFIG_PERF_EVENTS
 extern void perf_enable_hardirq_events(struct irq_desc *desc);
 extern void perf_disable_hardirq_events(struct irq_desc *desc);
+extern void perf_enable_softirq_events(int vector);
+extern void perf_disable_softirq_events(int vector);
 #else
 static inline void perf_enable_hardirq_events(struct irq_desc *desc)	{ }
 static inline void perf_disable_hardirq_events(struct irq_desc *desc)	{ }
+static inline void perf_enable_softirq_events(int vector)		{ }
+static inline void perf_disable_softirq_events(int vector)		{ }
 #endif
 
 /**

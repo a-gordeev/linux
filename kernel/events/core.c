@@ -44,6 +44,8 @@
 
 #include <asm/irq_regs.h>
 
+extern void perf_init_softirq_events(int cpu);
+
 struct remote_function_call {
 	struct task_struct	*p;
 	int			(*func)(void *info);
@@ -120,7 +122,11 @@ static int cpu_function_call(int cpu, int (*func) (void *info), void *info)
 #define PERF_FLAG_ALL (PERF_FLAG_FD_NO_GROUP |\
 		       PERF_FLAG_FD_OUTPUT |\
 		       PERF_FLAG_PID_CGROUP |\
-		       PERF_FLAG_PID_HARDIRQ)
+		       PERF_FLAG_PID_HARDIRQ |\
+		       PERF_FLAG_PID_SOFTIRQ)
+
+#define PERF_FLAG_IRQ_ALL (PERF_FLAG_PID_HARDIRQ |\
+			   PERF_FLAG_PID_SOFTIRQ)
 
 /*
  * branch priv levels that need permission checks
@@ -880,6 +886,28 @@ void perf_pmu_enable_hardirq(struct pmu *pmu, int irq)
 	int *count = this_cpu_ptr(pmu->pmu_hardirq_enable_count);
 	if (!(*count)++)
 		pmu->pmu_enable_hardirq(pmu, irq);
+}
+
+/*
+ * FIXME Make perf_pmu_disable_softirq() per-vector based
+ * rather than a total counter
+ */
+void perf_pmu_disable_softirq(struct pmu *pmu, int vector)
+{
+	int *count = this_cpu_ptr(pmu->pmu_softirq_enable_count);
+	if (!--(*count))
+		pmu->pmu_disable_softirq(pmu, vector);
+}
+
+/*
+ * FIXME Make perf_pmu_enable_softirq() per-vector based
+ * rather than a total counter
+ */
+void perf_pmu_enable_softirq(struct pmu *pmu, int vector)
+{
+	int *count = this_cpu_ptr(pmu->pmu_softirq_enable_count);
+	if (!(*count)++)
+		pmu->pmu_enable_softirq(pmu, vector);
 }
 
 static DEFINE_PER_CPU(struct list_head, rotation_list);
@@ -6667,7 +6695,7 @@ static void account_event(struct perf_event *event)
  * Allocate and initialize a event structure
  */
 static struct perf_event *
-perf_event_alloc(struct perf_event_attr *attr, int cpu, int irq,
+perf_event_alloc(struct perf_event_attr *attr, int cpu, int irq, int vector,
 		 struct task_struct *task,
 		 struct perf_event *group_leader,
 		 struct perf_event *parent_event,
@@ -6712,6 +6740,7 @@ perf_event_alloc(struct perf_event_attr *attr, int cpu, int irq,
 	atomic_long_set(&event->refcount, 1);
 	event->cpu		= cpu;
 	event->hardirq		= irq;
+	event->softirq		= vector;
 	event->attr		= *attr;
 	event->group_leader	= group_leader;
 	event->pmu		= NULL;
@@ -7012,6 +7041,7 @@ SYSCALL_DEFINE5(perf_event_open,
 	struct task_struct *task = NULL;
 	struct pmu *pmu;
 	int irq = -1;
+	int vector = -1;
 	int event_fd;
 	int move_group = 0;
 	int err;
@@ -7020,17 +7050,28 @@ SYSCALL_DEFINE5(perf_event_open,
 	if (flags & ~PERF_FLAG_ALL)
 		return -EINVAL;
 
-	if ((flags & (PERF_FLAG_PID_CGROUP | PERF_FLAG_PID_HARDIRQ)) ==
-	    (PERF_FLAG_PID_CGROUP | PERF_FLAG_PID_HARDIRQ))
-		return -EINVAL;
-
 	/*
 	 * In irq mode, the pid argument is used to pass irq number.
 	 */
+	if (flags & PERF_FLAG_IRQ_ALL) {
+		if (flags & PERF_FLAG_PID_CGROUP)
+			return -EINVAL;
+		/*
+		 * FIXME Replace == with the mask weight
+		 */
+		if ((flags & PERF_FLAG_IRQ_ALL) == PERF_FLAG_IRQ_ALL)
+			return -EINVAL;
+	}
+
 	if (flags & PERF_FLAG_PID_HARDIRQ) {
 		irq = pid;
 		pid = -1;
-	}
+	} else if (flags & PERF_FLAG_PID_SOFTIRQ) {
+		if (pid >= NR_SOFTIRQS)
+			return -EINVAL;
+		vector = pid;
+		pid = -1;
+ 	}
 
 	/*
 	 * In cgroup mode, the pid argument is used to pass the fd
@@ -7080,8 +7121,8 @@ SYSCALL_DEFINE5(perf_event_open,
 
 	get_online_cpus();
 
-	event = perf_event_alloc(&attr, cpu, irq, task, group_leader, NULL,
-				 NULL, NULL);
+	event = perf_event_alloc(&attr, cpu, irq, vector, task, group_leader,
+				 NULL, NULL, NULL);
 	if (IS_ERR(event)) {
 		err = PTR_ERR(event);
 		goto err_task;
@@ -7284,7 +7325,7 @@ perf_event_create_kernel_counter(struct perf_event_attr *attr, int cpu,
 	 * Get the target context (task or percpu):
 	 */
 
-	event = perf_event_alloc(attr, cpu, -1, task, NULL, NULL,
+	event = perf_event_alloc(attr, cpu, -1, -1, task, NULL, NULL,
 				 overflow_handler, context);
 	if (IS_ERR(event)) {
 		err = PTR_ERR(event);
@@ -7602,6 +7643,7 @@ inherit_event(struct perf_event *parent_event,
 	child_event = perf_event_alloc(&parent_event->attr,
 					   parent_event->cpu,
 					   parent_event->hardirq,
+					   parent_event->softirq,
 					   child,
 					   group_leader, parent_event,
 				           NULL, NULL);
@@ -7850,6 +7892,7 @@ static void __init perf_event_init_all_cpus(void)
 		swhash = &per_cpu(swevent_htable, cpu);
 		mutex_init(&swhash->hlist_mutex);
 		INIT_LIST_HEAD(&per_cpu(rotation_list, cpu));
+		perf_init_softirq_events(cpu);
 	}
 }
 

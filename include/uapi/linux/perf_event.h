@@ -725,6 +725,7 @@ enum perf_callchain_context {
 #define PERF_FLAG_FD_OUTPUT		(1U << 1)
 #define PERF_FLAG_PID_CGROUP		(1U << 2) /* pid=cgroup id, per-cpu mode only */
 #define PERF_FLAG_PID_HARDIRQ		(1U << 3) /* pid=irq number */
+#define PERF_FLAG_PID_SOFTIRQ		(1U << 4) /* pid=softirq vector */
 
 union perf_mem_data_src {
 	__u64 val;
