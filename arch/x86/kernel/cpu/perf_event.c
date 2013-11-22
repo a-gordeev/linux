@@ -539,6 +539,11 @@ static void x86_pmu__disable_hardirq(struct pmu *pmu, int irq)
 	x86_pmu.disable_hardirq(irq);
 }
 
+static void x86_pmu__disable_softirq(struct pmu *pmu, int vector)
+{
+	x86_pmu.disable_softirq(vector);
+}
+
 void x86_pmu_enable_all(int added)
 {
 	struct cpu_hw_events *cpuc = &__get_cpu_var(cpu_hw_events);
@@ -574,6 +579,10 @@ void x86_pmu_enable_hardirq(int irq)
 		__x86_pmu_enable_event(&event->hw,
 				       ARCH_PERFMON_EVENTSEL_ENABLE);
 	}
+}
+
+void x86_pmu_nop_softirq_void_int(int vector)
+{
 }
 
 static struct pmu pmu;
@@ -982,6 +991,11 @@ static void x86_pmu__enable_hardirq(struct pmu *pmu, int irq)
 	x86_pmu.enable_hardirq(irq);
 }
 
+static void x86_pmu__enable_softirq(struct pmu *pmu, int vector)
+{
+	x86_pmu.enable_softirq(vector);
+}
+
 static DEFINE_PER_CPU(u64 [X86_PMC_IDX_MAX], pmc_prev_left);
 
 /*
@@ -1130,6 +1144,9 @@ static void x86_pmu_start(struct perf_event *event, int flags)
 	if (unlikely(is_hardirq_event(event))) {
 		__set_bit(idx, cpuc->active_hardirq_mask);
 		perf_event_hardirq_add(event);
+	} else if (unlikely(is_softirq_event(event))) {
+		__set_bit(idx, cpuc->active_softirq_mask);
+		perf_event_softirq_add(event);
 	} else {
 		__set_bit(idx, cpuc->active_mask);
 	}
@@ -1170,6 +1187,7 @@ void perf_event_print_debug(void)
 	}
 	pr_info("CPU#%d: active:             %016llx\n", cpu, *(u64 *)cpuc->active_mask);
 	pr_info("CPU#%d: active hardirq:     %016llx\n", cpu, *(u64 *)cpuc->active_hardirq_mask);
+	pr_info("CPU#%d: active softirq:     %016llx\n", cpu, *(u64 *)cpuc->active_softirq_mask);
 
 	for (idx = 0; idx < x86_pmu.num_counters; idx++) {
 		rdmsrl(x86_pmu_config_addr(idx), pmc_ctrl);
@@ -1199,10 +1217,13 @@ void x86_pmu_stop(struct perf_event *event, int flags)
 	struct hw_perf_event *hwc = &event->hw;
 
 	if (__test_and_clear_bit(hwc->idx, cpuc->active_mask) ||
-	    __test_and_clear_bit(hwc->idx, cpuc->active_hardirq_mask)) {
+	    __test_and_clear_bit(hwc->idx, cpuc->active_hardirq_mask) ||
+	    __test_and_clear_bit(hwc->idx, cpuc->active_softirq_mask)) {
 		x86_pmu.disable(event);
 		if (unlikely(is_hardirq_event(event)))
 			perf_event_hardirq_del(event);
+		else if (unlikely(is_softirq_event(event)))
+			perf_event_softirq_del(event);
 		cpuc->events[hwc->idx] = NULL;
 		WARN_ON_ONCE(hwc->state & PERF_HES_STOPPED);
 		hwc->state |= PERF_HES_STOPPED;
@@ -1276,7 +1297,8 @@ int x86_pmu_handle_irq(struct pt_regs *regs)
 
 	for (idx = 0; idx < x86_pmu.num_counters; idx++) {
 		if (!test_bit(idx, cpuc->active_mask) &&
-		    !test_bit(idx, cpuc->active_hardirq_mask)) {
+		    !test_bit(idx, cpuc->active_hardirq_mask) &&
+		    !test_bit(idx, cpuc->active_softirq_mask)) {
 			/*
 			 * Though we deactivated the counter some cpus
 			 * might still deliver spurious interrupts still
@@ -1915,6 +1937,9 @@ static struct pmu pmu = {
 
 	.pmu_enable_hardirq	= x86_pmu__enable_hardirq,
 	.pmu_disable_hardirq	= x86_pmu__disable_hardirq,
+
+	.pmu_enable_softirq	= x86_pmu__enable_softirq,
+	.pmu_disable_softirq	= x86_pmu__disable_softirq,
 
 	.attr_groups		= x86_pmu_attr_groups,
 

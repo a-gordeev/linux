@@ -128,6 +128,7 @@ struct cpu_hw_events {
 	struct perf_event	*events[X86_PMC_IDX_MAX]; /* in counter order */
 	unsigned long		active_mask[BITS_TO_LONGS(X86_PMC_IDX_MAX)];
 	unsigned long		active_hardirq_mask[BITS_TO_LONGS(X86_PMC_IDX_MAX)];
+	unsigned long		active_softirq_mask[BITS_TO_LONGS(X86_PMC_IDX_MAX)];
 	unsigned long		running[BITS_TO_LONGS(X86_PMC_IDX_MAX)];
 	int			enabled;
 
@@ -368,6 +369,8 @@ struct x86_pmu {
 	void		(*enable_all)(int added);
 	void		(*disable_hardirq)(int irq);
 	void		(*enable_hardirq)(int irq);
+	void		(*disable_softirq)(int vector);
+	void		(*enable_softirq)(int vector);
 	void		(*enable)(struct perf_event *);
 	void		(*disable)(struct perf_event *);
 	int		(*hw_config)(struct perf_event *event);
@@ -568,6 +571,8 @@ void x86_pmu_enable_all(int added);
 
 void x86_pmu_enable_hardirq(int irq);
 void x86_pmu_nop_hardirq_void_int(int irq);
+
+void x86_pmu_nop_softirq_void_int(int vector);
 
 int perf_assign_events(struct perf_event **events, int n,
 			int wmin, int wmax, int *assign);

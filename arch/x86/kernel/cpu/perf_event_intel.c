@@ -1062,6 +1062,24 @@ u64 __get_intel_ctrl_hardirq_mask(struct cpu_hw_events *cpuc, int irq)
 	return ret;
 }
 
+u64 __get_intel_ctrl_softirq_mask(struct cpu_hw_events *cpuc, int vector)
+{
+	int idx;
+	u64 ret = 0;
+
+	for (idx = 0; idx < x86_pmu.num_counters; idx++) {
+		struct perf_event *event = cpuc->events[idx];
+
+		if (!test_bit(idx, cpuc->active_softirq_mask))
+			continue;
+
+		if ((event->softirq == vector) || (vector < 0))
+			ret |= (1ull << event->hw.idx);
+	}
+
+	return ret;
+}
+
 static void intel_pmu_disable_all(void)
 {
 	struct cpu_hw_events *cpuc = &__get_cpu_var(cpu_hw_events);
@@ -1099,9 +1117,10 @@ static void intel_pmu_enable_all(int added)
 {
 	struct cpu_hw_events *cpuc = &__get_cpu_var(cpu_hw_events);
 	u64 hardirq_mask = __get_intel_ctrl_hardirq_mask(cpuc, -1);
+	u64 softirq_mask = __get_intel_ctrl_softirq_mask(cpuc, -1);
 
 	__intel_pmu_enable(x86_pmu.intel_ctrl &
-			 ~(cpuc->intel_ctrl_guest_mask | hardirq_mask));
+			 ~(cpuc->intel_ctrl_guest_mask | hardirq_mask | softirq_mask));
 }
 
 static void intel_pmu_disable_hardirq(int irq)
@@ -1462,7 +1481,8 @@ again:
 		handled++;
 
 		if (!test_bit(bit, cpuc->active_mask) &&
-		    !test_bit(bit, cpuc->active_hardirq_mask))
+		    !test_bit(bit, cpuc->active_hardirq_mask) &&
+		    !test_bit(bit, cpuc->active_softirq_mask))
 			continue;
 
 		if (!intel_pmu_save_and_restart(event))
@@ -2010,6 +2030,8 @@ static __initconst const struct x86_pmu core_pmu = {
 	.enable_all		= core_pmu_enable_all,
 	.disable_hardirq	= x86_pmu_disable_hardirq,
 	.enable_hardirq		= core_pmu_enable_hardirq,
+	.disable_softirq	= x86_pmu_nop_softirq_void_int,
+	.enable_softirq		= x86_pmu_nop_softirq_void_int,
 	.enable			= core_pmu_enable_event,
 	.disable		= x86_pmu_disable_event,
 	.hw_config		= x86_pmu_hw_config,
@@ -2156,6 +2178,8 @@ static __initconst const struct x86_pmu intel_pmu = {
 	.enable_all		= intel_pmu_enable_all,
 	.disable_hardirq	= intel_pmu_disable_hardirq,
 	.enable_hardirq		= intel_pmu_enable_hardirq,
+	.disable_softirq	= x86_pmu_nop_softirq_void_int,
+	.enable_softirq		= x86_pmu_nop_softirq_void_int,
 	.enable			= intel_pmu_enable_event,
 	.disable		= intel_pmu_disable_event,
 	.hw_config		= intel_pmu_hw_config,
