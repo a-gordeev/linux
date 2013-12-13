@@ -532,13 +532,64 @@ void x86_pmu_enable_all(int added)
 	int idx;
 
 	for (idx = 0; idx < x86_pmu.num_counters; idx++) {
-		struct hw_perf_event *hwc = &cpuc->events[idx]->hw;
+		struct perf_event *event = cpuc->events[idx];
+		struct hw_perf_event *hwc = &event->hw;
 
 		if (!test_bit(idx, cpuc->active_mask))
+			continue;
+		if (is_hardirq_event(event))
 			continue;
 
 		__x86_pmu_enable_event(hwc, ARCH_PERFMON_EVENTSEL_ENABLE);
 	}
+}
+
+void x86_pmu_enable_hardirq(struct perf_event *events[], int count)
+{
+	struct cpu_hw_events *cpuc = &__get_cpu_var(cpu_hw_events);
+	int idx;
+
+	for (idx = 0; idx < count; idx++) {
+		struct perf_event *event = cpuc->events[idx];
+		struct hw_perf_event *hwc = &event->hw;
+
+		BUG_ON(!test_bit(idx, cpuc->active_mask));
+		BUG_ON(!is_hardirq_event(event));
+
+		if (event->hw.state)
+			continue;
+
+		__x86_pmu_enable_event(hwc, ARCH_PERFMON_EVENTSEL_ENABLE);
+	}
+}
+
+void x86_pmu_disable_hardirq(struct perf_event *events[], int count)
+{
+	struct cpu_hw_events *cpuc = &__get_cpu_var(cpu_hw_events);
+	int idx;
+
+	for (idx = 0; idx < count; idx++) {
+		struct perf_event *event = events[idx];
+
+		BUG_ON(!test_bit(idx, cpuc->active_mask));
+		BUG_ON(!is_hardirq_event(event));
+
+		x86_pmu_disable_event(event);
+	}
+}
+
+void x86_pmu_nop_hardirq(struct perf_event *events[], int count)
+{
+}
+
+static void x86_pmu_start_hardirq(struct perf_event *events[], int count)
+{
+	x86_pmu.enable_hardirq(events, count);
+}
+
+static void x86_pmu_stop_hardirq(struct perf_event *events[], int count)
+{
+	x86_pmu.disable_hardirq(events, count);
 }
 
 static struct pmu pmu;
@@ -1871,6 +1922,8 @@ static struct pmu pmu = {
 	.del			= x86_pmu_del,
 	.start			= x86_pmu_start,
 	.stop			= x86_pmu_stop,
+	.start_hardirq		= x86_pmu_start_hardirq,
+	.stop_hardirq		= x86_pmu_stop_hardirq,
 	.read			= x86_pmu_read,
 
 	.start_txn		= x86_pmu_start_txn,

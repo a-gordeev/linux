@@ -367,6 +367,8 @@ struct x86_pmu {
 	void		(*enable_all)(int added);
 	void		(*enable)(struct perf_event *);
 	void		(*disable)(struct perf_event *);
+	void		(*enable_hardirq)(struct perf_event *[], int);
+	void		(*disable_hardirq)(struct perf_event *[], int);
 	int		(*hw_config)(struct perf_event *event);
 	int		(*schedule_events)(struct cpu_hw_events *cpuc, int n, int *assign);
 	unsigned	eventsel;
@@ -538,6 +540,8 @@ int x86_pmu_hw_config(struct perf_event *event);
 
 void x86_pmu_disable_all(void);
 
+void x86_pmu_disable_hardirq(struct perf_event *events[], int count);
+
 static inline void __x86_pmu_enable_event(struct hw_perf_event *hwc,
 					  u64 enable_mask)
 {
@@ -549,6 +553,12 @@ static inline void __x86_pmu_enable_event(struct hw_perf_event *hwc,
 }
 
 void x86_pmu_enable_all(int added);
+
+void x86_pmu_enable_hardirq(struct perf_event *events[], int count);
+
+void x86_pmu_nop_hardirq(struct perf_event *events[], int count);
+
+void x86_pmu_nop_hardirq_void_int(int irq);
 
 int perf_assign_events(struct perf_event **events, int n,
 			int wmin, int wmax, int *assign);

@@ -119,8 +119,7 @@ static int cpu_function_call(int cpu, int (*func) (void *info), void *info)
 
 #define PERF_FLAG_ALL (PERF_FLAG_FD_NO_GROUP |\
 		       PERF_FLAG_FD_OUTPUT |\
-		       PERF_FLAG_PID_CGROUP |\
-		       PERF_FLAG_PID_HARDIRQ)
+		       PERF_FLAG_PID_CGROUP)
 
 /*
  * branch priv levels that need permission checks
@@ -7028,34 +7027,12 @@ SYSCALL_DEFINE5(perf_event_open,
 	struct fd group = {NULL, 0};
 	struct task_struct *task = NULL;
 	struct pmu *pmu;
-	int hardirq = -1;
 	int event_fd;
 	int move_group = 0;
 	int err;
 
 	/* for future expandability... */
 	if (flags & ~PERF_FLAG_ALL)
-		return -EINVAL;
-
-	if ((flags & (PERF_FLAG_PID_CGROUP | PERF_FLAG_PID_HARDIRQ)) ==
-	    (PERF_FLAG_PID_CGROUP | PERF_FLAG_PID_HARDIRQ))
-		return -EINVAL;
-
-	/*
-	 * In irq mode, the pid argument is used to pass irq number.
-	 */
-	if (flags & PERF_FLAG_PID_HARDIRQ) {
-		hardirq = pid;
-		pid = -1;
-	}
-
-	/*
-	 * In cgroup mode, the pid argument is used to pass the fd
-	 * opened to the cgroup directory in cgroupfs. The cpu argument
-	 * designates the cpu on which to monitor threads from that
-	 * cgroup.
-	 */
-	if ((flags & PERF_FLAG_PID_CGROUP) && (pid == -1 || cpu == -1))
 		return -EINVAL;
 
 	err = perf_copy_attr(attr_uptr, &attr);
@@ -7071,6 +7048,15 @@ SYSCALL_DEFINE5(perf_event_open,
 		if (attr.sample_freq > sysctl_perf_event_sample_rate)
 			return -EINVAL;
 	}
+
+	/*
+	 * In cgroup mode, the pid argument is used to pass the fd
+	 * opened to the cgroup directory in cgroupfs. The cpu argument
+	 * designates the cpu on which to monitor threads from that
+	 * cgroup.
+	 */
+	if ((flags & PERF_FLAG_PID_CGROUP) && (pid == -1 || cpu == -1))
+		return -EINVAL;
 
 	event_fd = get_unused_fd();
 	if (event_fd < 0)
