@@ -1057,14 +1057,11 @@ static void intel_pmu_disable_all(void)
 	intel_pmu_lbr_disable_all();
 }
 
-static void intel_pmu_enable_all(int added)
+static void __intel_pmu_enable(struct cpu_hw_events *cpuc, u64 control)
 {
-	struct cpu_hw_events *cpuc = &__get_cpu_var(cpu_hw_events);
-
 	intel_pmu_pebs_enable_all();
 	intel_pmu_lbr_enable_all();
-	wrmsrl(MSR_CORE_PERF_GLOBAL_CTRL,
-			x86_pmu.intel_ctrl & ~cpuc->intel_ctrl_guest_mask);
+	wrmsrl(MSR_CORE_PERF_GLOBAL_CTRL, control);
 
 	if (test_bit(INTEL_PMC_IDX_FIXED_BTS, cpuc->active_mask)) {
 		struct perf_event *event =
@@ -1075,6 +1072,56 @@ static void intel_pmu_enable_all(int added)
 
 		intel_pmu_enable_bts(event->hw.config);
 	}
+}
+
+static void intel_pmu_enable_all(int added)
+{
+	struct cpu_hw_events *cpuc = &__get_cpu_var(cpu_hw_events);
+	u64 disable_mask = cpuc->intel_ctrl_guest_mask |
+			   cpuc->intel_ctrl_hardirq_mask;
+	__intel_pmu_enable(cpuc, x86_pmu.intel_ctrl & ~disable_mask);
+}
+
+u64 __get_intel_ctrl_hardirq_mask(struct perf_event *events[], int count)
+{
+	u64 ret = 0;
+	int i;
+
+	BUG_ON(count > x86_pmu.num_counters);
+
+	for (i = 0; i < count; i++) {
+		struct perf_event *event = events[i];
+		BUG_ON(!is_hardirq_event(event));
+		if (!event->hw.state)
+			ret |= (1ull << event->hw.idx);
+	}
+
+	return ret;
+}
+
+static inline u64 intel_pmu_get_control(void)
+{
+	u64 control;
+
+	rdmsrl(MSR_CORE_PERF_GLOBAL_CTRL, control);
+
+	return control;
+}
+
+static void intel_pmu_disable_hardirq(struct perf_event *events[], int count)
+{
+	u64 control = intel_pmu_get_control();
+	u64 mask = __get_intel_ctrl_hardirq_mask(events, count);
+
+	wrmsrl(MSR_CORE_PERF_GLOBAL_CTRL, control & ~mask);
+}
+
+static void intel_pmu_enable_hardirq(struct perf_event *events[], int count)
+{
+	u64 control = intel_pmu_get_control();
+	u64 mask = __get_intel_ctrl_hardirq_mask(events, count);
+
+	wrmsrl(MSR_CORE_PERF_GLOBAL_CTRL, control | mask);
 }
 
 /*
@@ -1200,6 +1247,8 @@ static void intel_pmu_disable_event(struct perf_event *event)
 		return;
 	}
 
+	if (is_hardirq_event(event))
+		cpuc->intel_ctrl_hardirq_mask &= ~(1ull << hwc->idx);
 	cpuc->intel_ctrl_guest_mask &= ~(1ull << hwc->idx);
 	cpuc->intel_ctrl_host_mask &= ~(1ull << hwc->idx);
 	cpuc->intel_cp_status &= ~(1ull << hwc->idx);
@@ -1276,6 +1325,8 @@ static void intel_pmu_enable_event(struct perf_event *event)
 		cpuc->intel_ctrl_guest_mask |= (1ull << hwc->idx);
 	if (event->attr.exclude_guest)
 		cpuc->intel_ctrl_host_mask |= (1ull << hwc->idx);
+	if (is_hardirq_event(event))
+		cpuc->intel_ctrl_hardirq_mask |= (1ull << hwc->idx);
 
 	if (unlikely(event_is_checkpointed(event)))
 		cpuc->intel_cp_status |= (1ull << hwc->idx);
@@ -1347,7 +1398,7 @@ static int intel_pmu_handle_irq(struct pt_regs *regs)
 	struct perf_sample_data data;
 	struct cpu_hw_events *cpuc;
 	int bit, loops;
-	u64 status;
+	u64 control, status;
 	int handled;
 
 	cpuc = &__get_cpu_var(cpu_hw_events);
@@ -1358,11 +1409,12 @@ static int intel_pmu_handle_irq(struct pt_regs *regs)
 	 */
 	if (!x86_pmu.late_ack)
 		apic_write(APIC_LVTPC, APIC_DM_NMI);
+	control = intel_pmu_get_control();
 	intel_pmu_disable_all();
 	handled = intel_pmu_drain_bts_buffer();
 	status = intel_pmu_get_status();
 	if (!status) {
-		intel_pmu_enable_all(0);
+		__intel_pmu_enable(cpuc, control);
 		return handled;
 	}
 
@@ -1427,7 +1479,7 @@ again:
 		goto again;
 
 done:
-	intel_pmu_enable_all(0);
+	__intel_pmu_enable(cpuc, control);
 	/*
 	 * Only unmask the NMI after the overflow counters
 	 * have been reset. This avoids spurious NMIs on
@@ -2078,8 +2130,8 @@ static __initconst const struct x86_pmu intel_pmu = {
 	.disable_all		= intel_pmu_disable_all,
 	.enable_all		= intel_pmu_enable_all,
 	.enable			= intel_pmu_enable_event,
-	.disable_hardirq	= x86_pmu_nop_hardirq,
-	.enable_hardirq		= x86_pmu_nop_hardirq,
+	.disable_hardirq	= intel_pmu_disable_hardirq,
+	.enable_hardirq		= intel_pmu_enable_hardirq,
 	.disable		= intel_pmu_disable_event,
 	.hw_config		= intel_pmu_hw_config,
 	.schedule_events	= x86_schedule_events,

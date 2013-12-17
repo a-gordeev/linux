@@ -164,6 +164,11 @@ struct cpu_hw_events {
 	struct perf_guest_switch_msr	guest_switch_msrs[X86_PMC_IDX_MAX];
 
 	/*
+	 * Intel hardware interrupt context exclude bits
+	 */
+	u64				intel_ctrl_hardirq_mask;
+
+	/*
 	 * Intel checkpoint mask
 	 */
 	u64				intel_cp_status;
