@@ -60,10 +60,16 @@ static void sd_dif_type1_generate(struct blk_integrity_exchg *bix, csum_fn *fn)
 	sector_t sector = bix->sector;
 	unsigned int i;
 
+	pr_debug("Entering sd_dif_type1_generate >>>>>>>>>>>>>>>\n");
+
 	for (i = 0 ; i < bix->data_size ; i += bix->sector_size, sdt++) {
 		sdt->guard_tag = fn(buf, bix->sector_size);
 		sdt->ref_tag = cpu_to_be32(sector & 0xffffffff);
 		sdt->app_tag = 0;
+
+		pr_debug("TYPE1 Generate: sector: %llu sdt->guard_tag: 0x%04x sdt->app_tag: 0x%04x"
+			" sdt->ref_tag: %u\n", (unsigned long long)sector,
+			sdt->guard_tag, sdt->app_tag, be32_to_cpu(sdt->ref_tag));
 
 		buf += bix->sector_size;
 		sector++;
@@ -110,6 +116,10 @@ static int sd_dif_type1_verify(struct blk_integrity_exchg *bix, csum_fn *fn)
 			       be16_to_cpu(sdt->guard_tag), be16_to_cpu(csum));
 			return -EIO;
 		}
+
+		pr_debug("TYPE1 Verify sector: %llu sdt->guard_tag: 0x%04x sdt->app_tag: 0x%04x"
+			" sdt->ref_tag: %u\n", (unsigned long long)sector,
+			sdt->guard_tag, sdt->app_tag, be32_to_cpu(sdt->ref_tag));
 
 		buf += bix->sector_size;
 		sector++;

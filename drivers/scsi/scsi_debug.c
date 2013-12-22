@@ -1834,11 +1834,17 @@ static int prot_verify_read(struct scsi_cmnd *SCpnt, sector_t start_sec,
 	struct sd_dif_tuple *sdt;
 	sector_t sector;
 
+	pr_debug("Entering prot_verify_read: sector: %u ei_lba: %u\n", sectors, ei_lba);
+
 	for (i = 0; i < sectors; i++) {
 		int ret;
 
 		sector = start_sec + i;
 		sdt = dif_store(sector);
+
+		pr_debug("READ sector: %llu sdt->guard_tag: 0x%04x sdt->app_tag: 0x%04x"
+			" sdt->ref_tag: %u\n", (unsigned long long)sector,
+			sdt->guard_tag, sdt->app_tag, be32_to_cpu(sdt->ref_tag));
 
 		if (sdt->app_tag == cpu_to_be16(0xffff))
 			continue;
@@ -1941,6 +1947,8 @@ static int prot_verify_write(struct scsi_cmnd *SCpnt, sector_t start_sec,
 	sector_t sector = start_sec;
 	int ppage_offset;
 
+	pr_debug("Enering prot_verify_write sector: %u ei_lba: %u\n", sectors, ei_lba);
+
 	BUG_ON(scsi_sg_count(SCpnt) == 0);
 	BUG_ON(scsi_prot_sg_count(SCpnt) == 0);
 
@@ -1967,6 +1975,10 @@ static int prot_verify_write(struct scsi_cmnd *SCpnt, sector_t start_sec,
 			}
 
 			sdt = paddr + ppage_offset;
+
+			pr_debug("WRITE sector: %llu sdt->guard_tag: 0x%04x sdt->app_tag: 0x%04x"
+				" sdt->ref_tag: %u\n", (unsigned long long)sector,
+				sdt->guard_tag, sdt->app_tag, be32_to_cpu(sdt->ref_tag));
 
 			ret = dif_verify(sdt, daddr + j, sector, ei_lba);
 			if (ret) {
