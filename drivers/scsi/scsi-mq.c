@@ -151,7 +151,7 @@ int scsi_mq_alloc_queue(struct Scsi_Host *sh, struct scsi_device *sdev)
 	struct request_queue *q;
 	struct request *rq;
 	struct scsi_cmnd *sc;
-	int i, j, sgl_size;
+	int i, j, rc, sgl_size;
 	bool prot = true;
 
 	sdev->sdev_mq_reg.ops = &scsi_mq_ops;
@@ -181,8 +181,11 @@ int scsi_mq_alloc_queue(struct Scsi_Host *sh, struct scsi_device *sdev)
 
 	q->sg_reserved_size = INT_MAX;
 
-	if (elevator_init(q, NULL)) {
-		dump_stack();
+	mutex_lock(&q->sysfs_lock);
+	rc = elevator_init(q, NULL);
+	mutex_unlock(&q->sysfs_lock);
+	if (rc) {
+		pr_err("elevator_init failed for scsi-mq: %d\n", rc);
 		return -ENOMEM;
 	}
 	/*
