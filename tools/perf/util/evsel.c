@@ -704,6 +704,14 @@ int perf_evsel__set_filter(struct perf_evsel *evsel, int ncpus, int nthreads,
 				     (void *)filter);
 }
 
+int perf_evsel__set_hardirq(struct perf_evsel *evsel, int ncpus, int nthreads,
+			    const struct perf_hardirq_event_disp *disp)
+{
+	return perf_evsel__run_ioctl(evsel, ncpus, nthreads,
+				     PERF_EVENT_IOC_SET_HARDIRQ,
+				     (void *)disp);
+}
+
 int perf_evsel__enable(struct perf_evsel *evsel, int ncpus, int nthreads)
 {
 	return perf_evsel__run_ioctl(evsel, ncpus, nthreads,

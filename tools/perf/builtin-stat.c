@@ -292,6 +292,7 @@ static int create_perf_stat_counter(struct perf_evsel *evsel)
 				    PERF_FORMAT_TOTAL_TIME_RUNNING;
 
 	attr->inherit = !no_inherit;
+	attr->hardirq = 1;
 
 	if (target__has_cpu(&target))
 		return perf_evsel__open_per_cpu(evsel, perf_evsel__cpus(evsel));
@@ -586,6 +587,12 @@ static int __run_perf_stat(int argc, const char **argv)
 
 	if (perf_evlist__apply_filters(evsel_list)) {
 		error("failed to set filter with %d (%s)\n", errno,
+			strerror(errno));
+		return -1;
+	}
+
+	if (perf_evlist__apply_hardirq(evsel_list)) {
+		error("failed to set hardirq with %d (%s)\n", errno,
 			strerror(errno));
 		return -1;
 	}
@@ -1613,6 +1620,8 @@ int cmd_stat(int argc, const char **argv, const char *prefix __maybe_unused)
 		     parse_events_option),
 	OPT_CALLBACK(0, "filter", &evsel_list, "filter",
 		     "event filter", parse_filter),
+	OPT_CALLBACK('h', "hardirq", &evsel_list, "hardirq",
+		     "stat events on existing hardware IRQ", parse_hardirq),
 	OPT_BOOLEAN('i', "no-inherit", &no_inherit,
 		    "child tasks do not inherit counters"),
 	OPT_STRING('p', "pid", &target.pid, "pid",

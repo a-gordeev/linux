@@ -987,6 +987,30 @@ int parse_filter(const struct option *opt, const char *str,
 	return 0;
 }
 
+int parse_hardirq(const struct option *opt, const char *str,
+		  int unset __maybe_unused)
+{
+	struct perf_evlist *evlist = *(struct perf_evlist **)opt->value;
+	struct perf_evsel *evsel;
+	struct perf_hardirq_event_disp *event_disp;
+
+	event_disp = malloc(offsetof(typeof(*event_disp), disp) +
+			    sizeof(event_disp->disp[0]));
+	if (!event_disp) {
+		fprintf(stderr, "not enough memory to hold hardirq disp\n");
+		return -1;
+	}
+
+	event_disp->nr_disp		= 1;
+	event_disp->disp[0].irq_nr	= atoi(str);
+	event_disp->disp[0].actions	= -1;
+
+	list_for_each_entry(evsel, &evlist->entries, node)
+		evsel->hardirq = event_disp;
+
+	return 0;
+}
+
 static const char * const event_type_descriptors[] = {
 	"Hardware event",
 	"Software event",

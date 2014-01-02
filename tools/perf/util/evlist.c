@@ -861,6 +861,27 @@ int perf_evlist__apply_filters(struct perf_evlist *evlist)
 	return err;
 }
 
+int perf_evlist__apply_hardirq(struct perf_evlist *evlist)
+{
+	struct perf_evsel *evsel;
+	int err = 0;
+	const int ncpus = cpu_map__nr(evlist->cpus),
+		  nthreads = thread_map__nr(evlist->threads);
+
+	list_for_each_entry(evsel, &evlist->entries, node) {
+		if (evsel->hardirq == NULL)
+			continue;
+
+		err = perf_evsel__set_hardirq(evsel, ncpus, nthreads, evsel->hardirq);
+		if (err)
+			break;
+
+		evsel->attr.hardirq = 1;
+	}
+
+	return err;
+}
+
 int perf_evlist__set_filter(struct perf_evlist *evlist, const char *filter)
 {
 	struct perf_evsel *evsel;
@@ -870,6 +891,23 @@ int perf_evlist__set_filter(struct perf_evlist *evlist, const char *filter)
 
 	list_for_each_entry(evsel, &evlist->entries, node) {
 		err = perf_evsel__set_filter(evsel, ncpus, nthreads, filter);
+		if (err)
+			break;
+	}
+
+	return err;
+}
+
+int perf_evlist__set_hardirq(struct perf_evlist *evlist,
+			     const struct perf_hardirq_event_disp *hardirq)
+{
+	struct perf_evsel *evsel;
+	int err = 0;
+	const int ncpus = cpu_map__nr(evlist->cpus),
+		  nthreads = thread_map__nr(evlist->threads);
+
+	list_for_each_entry(evsel, &evlist->entries, node) {
+		err = perf_evsel__set_hardirq(evsel, ncpus, nthreads, hardirq);
 		if (err)
 			break;
 	}
