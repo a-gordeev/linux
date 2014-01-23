@@ -1315,7 +1315,7 @@ static int nvme_create_queue(struct nvme_queue *nvmeq)
 	nvme_init_queue(nvmeq);
 	spin_unlock_irq(&nvmeq->q_lock);
 
-	return result;
+	return 0;
 
  release_sq:
 	adapter_delete_sq(nvmeq);
@@ -1431,7 +1431,7 @@ static int nvme_configure_admin_queue(struct nvme_dev *dev)
 	spin_lock_irq(&nvmeq->q_lock);
 	nvme_init_queue(nvmeq);
 	spin_unlock_irq(&nvmeq->q_lock);
-	return result;
+	return 0;
 }
 
 struct nvme_iod *nvme_map_user_pages(struct nvme_dev *dev, int write,
@@ -2414,7 +2414,7 @@ static int nvme_dev_start(struct nvme_dev *dev)
 	if (result && result != -EBUSY)
 		goto disable;
 
-	return result;
+	return 0;
 
  disable:
 	nvme_disable_queue(dev->queues[0]);
