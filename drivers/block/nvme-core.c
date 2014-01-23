@@ -1956,12 +1956,6 @@ static int nvme_setup_io_queues(struct nvme_dev *dev)
 	}
 	spin_unlock(&dev_list_lock);
 
-	cpu = cpumask_first(cpu_online_mask);
-	for (i = 0; i < nr_io_queues; i++) {
-		irq_set_affinity_hint(dev->entry[i].vector, get_cpu_mask(cpu));
-		cpu = cpumask_next(cpu, cpu_online_mask);
-	}
-
 	q_depth = min_t(int, NVME_CAP_MQES(readq(&dev->bar->cap)) + 1,
 								NVME_Q_DEPTH);
 	for (i = dev->queue_count - 1; i < nr_io_queues; i++) {
@@ -1984,6 +1978,12 @@ static int nvme_setup_io_queues(struct nvme_dev *dev)
 				nvme_disable_queue(dev, i);
 			goto free_queues;
 		}
+	}
+
+	cpu = cpumask_first(cpu_online_mask);
+	for (i = 0; i < nr_io_queues; i++) {
+		irq_set_affinity_hint(dev->entry[i].vector, get_cpu_mask(cpu));
+		cpu = cpumask_next(cpu, cpu_online_mask);
 	}
 
 	return 0;
