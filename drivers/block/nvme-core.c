@@ -1886,10 +1886,10 @@ static size_t db_bar_size(struct nvme_dev *dev, unsigned nr_io_queues)
 	return 4096 + ((nr_io_queues + 1) * 8 * dev->db_stride);
 }
 
-static int nvme_setup_io_queues(struct nvme_dev *dev, int nr_io_queues)
+static int nvme_init_bar(struct nvme_dev *dev, int nr_io_queues)
 {
 	struct pci_dev *pdev = dev->pci_dev;
-	int result, cpu, i, vecs, size, q_depth;
+	int size;
 
 	size = db_bar_size(dev, nr_io_queues);
 	if (size > 8192) {
@@ -1905,6 +1905,14 @@ static int nvme_setup_io_queues(struct nvme_dev *dev, int nr_io_queues)
 		dev->dbs = ((void __iomem *)dev->bar) + 4096;
 		dev->queues[0]->q_db = dev->dbs;
 	}
+
+	return nr_io_queues;
+}
+
+static int nvme_setup_io_queues(struct nvme_dev *dev, int nr_io_queues)
+{
+	struct pci_dev *pdev = dev->pci_dev;
+	int result, cpu, i, vecs, q_depth;
 
 	/* Deregister the admin queue's interrupt */
 	free_irq(dev->entry[dev->queues[0]->cq_vector].vector, dev->queues[0]);
@@ -2417,6 +2425,10 @@ static int nvme_dev_start(struct nvme_dev *dev)
 	spin_unlock(&dev_list_lock);
 
 	result = nvme_set_queue_count(dev, num_online_cpus());
+	if (result < 0)
+		goto disable;
+
+	result = nvme_init_bar(dev, result);
 	if (result < 0)
 		goto disable;
 
