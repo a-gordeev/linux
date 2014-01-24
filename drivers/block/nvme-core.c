@@ -942,8 +942,10 @@ int nvme_submit_admin_cmd_async(struct nvme_dev *dev, struct nvme_command *cmd,
 	return nvme_submit_async_cmd(dev->queues[0], cmd, cmdinfo, ADMIN_TIMEOUT);
 }
 
-static int adapter_delete_queue(struct nvme_dev *dev, u8 opcode, u16 id)
+static int adapter_delete_queue(struct nvme_queue *nvmeq, u8 opcode)
 {
+	struct nvme_dev *dev = nvmeq->dev;
+	u16 id = nvmeq->qid;
 	int status;
 	struct nvme_command c;
 
@@ -957,9 +959,10 @@ static int adapter_delete_queue(struct nvme_dev *dev, u8 opcode, u16 id)
 	return 0;
 }
 
-static int adapter_alloc_cq(struct nvme_dev *dev, u16 qid,
-						struct nvme_queue *nvmeq)
+static int adapter_alloc_cq(struct nvme_queue *nvmeq)
 {
+	struct nvme_dev *dev = nvmeq->dev;
+	u16 qid = nvmeq->qid;
 	int status;
 	struct nvme_command c;
 	int flags = NVME_QUEUE_PHYS_CONTIG | NVME_CQ_IRQ_ENABLED;
@@ -978,9 +981,10 @@ static int adapter_alloc_cq(struct nvme_dev *dev, u16 qid,
 	return 0;
 }
 
-static int adapter_alloc_sq(struct nvme_dev *dev, u16 qid,
-						struct nvme_queue *nvmeq)
+static int adapter_alloc_sq(struct nvme_queue *nvmeq)
 {
+	struct nvme_dev *dev = nvmeq->dev;
+	u16 qid = nvmeq->qid;
 	int status;
 	struct nvme_command c;
 	int flags = NVME_QUEUE_PHYS_CONTIG | NVME_SQ_PRIO_MEDIUM;
@@ -999,14 +1003,14 @@ static int adapter_alloc_sq(struct nvme_dev *dev, u16 qid,
 	return 0;
 }
 
-static int adapter_delete_cq(struct nvme_dev *dev, u16 cqid)
+static int adapter_delete_cq(struct nvme_queue *nvmeq)
 {
-	return adapter_delete_queue(dev, nvme_admin_delete_cq, cqid);
+	return adapter_delete_queue(nvmeq, nvme_admin_delete_cq);
 }
 
-static int adapter_delete_sq(struct nvme_dev *dev, u16 sqid)
+static int adapter_delete_sq(struct nvme_queue *nvmeq)
 {
-	return adapter_delete_queue(dev, nvme_admin_delete_sq, sqid);
+	return adapter_delete_queue(nvmeq, nvme_admin_delete_sq);
 }
 
 int nvme_identify(struct nvme_dev *dev, unsigned nsid, unsigned cns,
@@ -1210,8 +1214,8 @@ static void nvme_disable_queue(struct nvme_queue *nvmeq)
 	/* Don't tell the adapter to delete the admin queue.
 	 * Don't tell a removed adapter to delete IO queues. */
 	if (qid && readl(&dev->bar->csts) != -1) {
-		adapter_delete_sq(dev, qid);
-		adapter_delete_cq(dev, qid);
+		adapter_delete_sq(nvmeq);
+		adapter_delete_cq(nvmeq);
 	}
 	nvme_clear_queue(nvmeq);
 }
@@ -1295,11 +1299,11 @@ static int nvme_create_queue(struct nvme_queue *nvmeq)
 	int qid = nvmeq->qid;
 	int result;
 
-	result = adapter_alloc_cq(dev, qid, nvmeq);
+	result = adapter_alloc_cq(nvmeq);
 	if (result < 0)
 		return result;
 
-	result = adapter_alloc_sq(dev, qid, nvmeq);
+	result = adapter_alloc_sq(nvmeq);
 	if (result < 0)
 		goto release_cq;
 
@@ -1314,9 +1318,9 @@ static int nvme_create_queue(struct nvme_queue *nvmeq)
 	return result;
 
  release_sq:
-	adapter_delete_sq(dev, qid);
+	adapter_delete_sq(nvmeq);
  release_cq:
-	adapter_delete_cq(dev, qid);
+	adapter_delete_cq(nvmeq);
 	return result;
 }
 
