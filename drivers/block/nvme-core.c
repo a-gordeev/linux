@@ -1875,22 +1875,21 @@ static int set_queue_count(struct nvme_dev *dev, int count)
 	return min(result & 0xffff, result >> 16) + 1;
 }
 
+static int nvme_set_queue_count(struct nvme_dev *dev, int count)
+{
+	int result = set_queue_count(dev, count);
+	return min(result, count);
+}
+
 static size_t db_bar_size(struct nvme_dev *dev, unsigned nr_io_queues)
 {
 	return 4096 + ((nr_io_queues + 1) * 8 * dev->db_stride);
 }
 
-static int nvme_setup_io_queues(struct nvme_dev *dev)
+static int nvme_setup_io_queues(struct nvme_dev *dev, int nr_io_queues)
 {
 	struct pci_dev *pdev = dev->pci_dev;
-	int result, cpu, i, vecs, nr_io_queues, size, q_depth;
-
-	nr_io_queues = num_online_cpus();
-	result = set_queue_count(dev, nr_io_queues);
-	if (result < 0)
-		return result;
-	if (result < nr_io_queues)
-		nr_io_queues = result;
+	int result, cpu, i, vecs, size, q_depth;
 
 	size = db_bar_size(dev, nr_io_queues);
 	if (size > 8192) {
@@ -2417,13 +2416,20 @@ static int nvme_dev_start(struct nvme_dev *dev)
 	list_add(&dev->node, &dev_list);
 	spin_unlock(&dev_list_lock);
 
-	result = nvme_setup_io_queues(dev);
-	if (result && result != -EBUSY)
+	result = nvme_set_queue_count(dev, num_online_cpus());
+	if (result < 0)
+		goto disable;
+
+	result = nvme_setup_io_queues(dev, result);
+	if (result)
 		goto disable;
 
 	return 0;
 
  disable:
+	if (result == -EBUSY)
+		return -EBUSY;
+
 	nvme_disable_queue(dev->queues[0]);
 	spin_lock(&dev_list_lock);
 	list_del_init(&dev->node);
