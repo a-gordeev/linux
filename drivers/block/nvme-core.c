@@ -1278,9 +1278,10 @@ static int queue_request_irq(struct nvme_dev *dev, struct nvme_queue *nvmeq,
 				IRQF_SHARED, name, nvmeq);
 }
 
-static void nvme_init_queue(struct nvme_queue *nvmeq, u16 qid)
+static void nvme_init_queue(struct nvme_queue *nvmeq)
 {
 	struct nvme_dev *dev = nvmeq->dev;
+	u16 qid = nvmeq->qid;
 	unsigned extra = nvme_queue_extra(nvmeq->q_depth);
 
 	nvmeq->sq_tail = 0;
@@ -1296,7 +1297,6 @@ static void nvme_init_queue(struct nvme_queue *nvmeq, u16 qid)
 static int nvme_create_queue(struct nvme_queue *nvmeq)
 {
 	struct nvme_dev *dev = nvmeq->dev;
-	int qid = nvmeq->qid;
 	int result;
 
 	result = adapter_alloc_cq(nvmeq);
@@ -1312,7 +1312,7 @@ static int nvme_create_queue(struct nvme_queue *nvmeq)
 		goto release_sq;
 
 	spin_lock_irq(&nvmeq->q_lock);
-	nvme_init_queue(nvmeq, qid);
+	nvme_init_queue(nvmeq);
 	spin_unlock_irq(&nvmeq->q_lock);
 
 	return result;
@@ -1429,7 +1429,7 @@ static int nvme_configure_admin_queue(struct nvme_dev *dev)
 		return result;
 
 	spin_lock_irq(&nvmeq->q_lock);
-	nvme_init_queue(nvmeq, 0);
+	nvme_init_queue(nvmeq);
 	spin_unlock_irq(&nvmeq->q_lock);
 	return result;
 }
