@@ -1267,9 +1267,10 @@ static struct nvme_queue *nvme_alloc_queue(struct nvme_dev *dev, int qid,
 	return NULL;
 }
 
-static int queue_request_irq(struct nvme_dev *dev, struct nvme_queue *nvmeq,
-							const char *name)
+static int queue_request_irq(struct nvme_queue *nvmeq, const char *name)
 {
+	struct nvme_dev *dev = nvmeq->dev;
+
 	if (use_threaded_interrupts)
 		return request_threaded_irq(dev->entry[nvmeq->cq_vector].vector,
 					nvme_irq_check, nvme_irq, IRQF_SHARED,
@@ -1296,7 +1297,6 @@ static void nvme_init_queue(struct nvme_queue *nvmeq)
 
 static int nvme_create_queue(struct nvme_queue *nvmeq)
 {
-	struct nvme_dev *dev = nvmeq->dev;
 	int result;
 
 	result = adapter_alloc_cq(nvmeq);
@@ -1307,7 +1307,7 @@ static int nvme_create_queue(struct nvme_queue *nvmeq)
 	if (result < 0)
 		goto release_cq;
 
-	result = queue_request_irq(dev, nvmeq, "nvme");
+	result = queue_request_irq(nvmeq, "nvme");
 	if (result < 0)
 		goto release_sq;
 
@@ -1424,7 +1424,7 @@ static int nvme_configure_admin_queue(struct nvme_dev *dev)
 	if (result)
 		return result;
 
-	result = queue_request_irq(dev, nvmeq, "nvme admin");
+	result = queue_request_irq(nvmeq, "nvme admin");
 	if (result)
 		return result;
 
@@ -1945,7 +1945,7 @@ static int nvme_setup_io_queues(struct nvme_dev *dev)
 	 */
 	nr_io_queues = vecs;
 
-	result = queue_request_irq(dev, dev->queues[0], "nvme admin");
+	result = queue_request_irq(dev->queues[0], "nvme admin");
 	if (result) {
 		dev->queues[0]->q_suspended = 1;
 		goto free_queues;
