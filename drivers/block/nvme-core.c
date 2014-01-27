@@ -1945,12 +1945,18 @@ static int nvme_init_interrupts(struct nvme_dev *dev, int nr_io_queues)
 	return vecs;
 }
 
-static int nvme_setup_io_queues(struct nvme_dev *dev, int nr_io_queues)
+static int nvme_setup_interrupts(struct nvme_dev *dev, int nr_io_queues)
 {
-	int result, cpu, i, q_depth;
+	struct nvme_queue *adminq = dev->queues[0];
+	int result;
 
-	/* Deregister the admin queue's interrupt */
-	free_irq(dev->entry[dev->queues[0]->cq_vector].vector, dev->queues[0]);
+	/*
+	 * Deregister the admin queue's interrupt, since it is about
+	 * to move to other IRQ number. We do not re-configure the
+	 * admin queue - are there any adverse effects of this trick?
+	 * Should we call nvme_clear_queue() to mimic nvme_disable_queue()?
+	 */
+	free_irq(dev->entry[adminq->cq_vector].vector, adminq);
 
 	/*
 	 * Should investigate if there's a performance win from allocating
@@ -1963,11 +1969,18 @@ static int nvme_setup_io_queues(struct nvme_dev *dev, int nr_io_queues)
 	 */
 	nr_io_queues = nvme_init_interrupts(dev, nr_io_queues);
 
-	result = queue_request_irq(dev->queues[0], "nvme admin");
+	result = queue_request_irq(adminq, "nvme admin");
 	if (result) {
-		dev->queues[0]->q_suspended = 1;
-		goto free_queues;
+		adminq->q_suspended = 1;
+		return result;
 	}
+
+	return nr_io_queues;
+}
+
+static int nvme_setup_io_queues(struct nvme_dev *dev, int nr_io_queues)
+{
+	int result, cpu, i, q_depth;
 
 	/* Free previously allocated queues that are no longer usable */
 	spin_lock(&dev_list_lock);
@@ -2442,6 +2455,11 @@ static int nvme_dev_start(struct nvme_dev *dev)
 	if (result < 0)
 		goto disable;
 
+	result = nvme_setup_interrupts(dev, result);
+	if (result < 0)
+		/* Admin queue interrupt has been torn down - can not go on */
+		goto delete;
+
 	result = nvme_setup_io_queues(dev, result);
 	if (result)
 		goto disable;
@@ -2453,6 +2471,7 @@ static int nvme_dev_start(struct nvme_dev *dev)
 		return -EBUSY;
 
 	nvme_disable_queue(dev->queues[0]);
+ delete:
 	spin_lock(&dev_list_lock);
 	list_del_init(&dev->node);
 	spin_unlock(&dev_list_lock);
