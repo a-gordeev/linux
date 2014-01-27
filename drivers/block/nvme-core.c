@@ -1424,7 +1424,7 @@ static int nvme_configure_admin_queue(struct nvme_dev *dev)
 	if (result)
 		return result;
 
-	dev->entry[0].vector = dev->pci_dev->irq;
+	dev->entry[nvmeq->cq_vector].vector = dev->pci_dev->irq;
 	result = queue_request_irq(nvmeq, "nvme admin");
 	if (result)
 		return result;
@@ -1908,7 +1908,7 @@ static int nvme_setup_io_queues(struct nvme_dev *dev)
 	}
 
 	/* Deregister the admin queue's interrupt */
-	free_irq(dev->entry[0].vector, dev->queues[0]);
+	free_irq(dev->entry[dev->queues[0]->cq_vector].vector, dev->queues[0]);
 
 	vecs = nr_io_queues;
 	for (i = 0; i < vecs; i++)
@@ -1989,9 +1989,16 @@ static int nvme_setup_io_queues(struct nvme_dev *dev)
 		}
 	}
 
-	cpu = cpumask_first(cpu_online_mask);
-	for (i = 0; i < nr_io_queues; i++) {
-		irq_set_affinity_hint(dev->entry[i].vector, get_cpu_mask(cpu));
+	cpu = nr_cpu_ids;
+	for (i = 1; i < dev->queue_count; i++) {
+		struct nvme_queue *nvmeq = dev->queues[i];
+
+		if (cpu >= nr_cpu_ids)
+			cpu = cpumask_first(cpu_online_mask);
+
+		irq_set_affinity_hint(dev->entry[nvmeq->cq_vector].vector,
+				      get_cpu_mask(cpu));
+
 		cpu = cpumask_next(cpu, cpu_online_mask);
 	}
 
