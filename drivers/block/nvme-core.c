@@ -1161,11 +1161,11 @@ static void nvme_free_queue(struct nvme_queue *nvmeq)
 	dev->queues[qid] = NULL;
 }
 
-static void nvme_free_queues(struct nvme_dev *dev, int lowest)
+static void nvme_free_queues(struct nvme_dev *dev)
 {
 	int i;
 
-	for (i = dev->queue_count - 1; i >= lowest; i--)
+	for (i = dev->queue_count - 1; i >= 0; i--)
 		nvme_free_queue(dev->queues[i]);
 }
 
@@ -2035,7 +2035,8 @@ static int nvme_setup_io_queues(struct nvme_dev *dev, int nr_io_queues)
 	return 0;
 
  free_queues:
-	nvme_free_queues(dev, 1);
+	for (i = dev->queue_count - 1; i > 0; i--)
+		nvme_free_queue(dev->queues[i]);
 	return result;
 }
 
@@ -2601,7 +2602,7 @@ static int nvme_probe(struct pci_dev *pdev, const struct pci_device_id *id)
  shutdown:
 	nvme_dev_shutdown(dev);
  release_pools:
-	nvme_free_queues(dev, 0);
+	nvme_free_queues(dev);
 	nvme_release_prp_pools(dev);
  release:
 	nvme_release_instance(dev);
@@ -2625,7 +2626,7 @@ static void nvme_remove(struct pci_dev *pdev)
 	misc_deregister(&dev->miscdev);
 	nvme_dev_remove(dev);
 	nvme_dev_shutdown(dev);
-	nvme_free_queues(dev, 0);
+	nvme_free_queues(dev);
 	nvme_release_instance(dev);
 	nvme_release_prp_pools(dev);
 	kref_put(&dev->kref, nvme_free_dev);
