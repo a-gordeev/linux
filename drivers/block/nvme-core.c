@@ -1909,13 +1909,10 @@ static int nvme_init_bar(struct nvme_dev *dev, int nr_io_queues)
 	return nr_io_queues;
 }
 
-static int nvme_setup_io_queues(struct nvme_dev *dev, int nr_io_queues)
+static int nvme_init_interrupts(struct nvme_dev *dev, int nr_io_queues)
 {
 	struct pci_dev *pdev = dev->pci_dev;
-	int result, cpu, i, vecs, q_depth;
-
-	/* Deregister the admin queue's interrupt */
-	free_irq(dev->entry[dev->queues[0]->cq_vector].vector, dev->queues[0]);
+	int result, i, vecs;
 
 	vecs = nr_io_queues;
 	for (i = 0; i < vecs; i++)
@@ -1945,13 +1942,26 @@ static int nvme_setup_io_queues(struct nvme_dev *dev, int nr_io_queues)
 		}
 	}
 
+	return vecs;
+}
+
+static int nvme_setup_io_queues(struct nvme_dev *dev, int nr_io_queues)
+{
+	int result, cpu, i, q_depth;
+
+	/* Deregister the admin queue's interrupt */
+	free_irq(dev->entry[dev->queues[0]->cq_vector].vector, dev->queues[0]);
+
 	/*
 	 * Should investigate if there's a performance win from allocating
 	 * more queues than interrupt vectors; it might allow the submission
 	 * path to scale better, even if the receive path is limited by the
 	 * number of interrupts.
+	 *
+	 * The admin queue's interrupt number is changed in case of
+	 * successful MSI-X or MSI allocation.
 	 */
-	nr_io_queues = vecs;
+	nr_io_queues = nvme_init_interrupts(dev, nr_io_queues);
 
 	result = queue_request_irq(dev->queues[0], "nvme admin");
 	if (result) {
