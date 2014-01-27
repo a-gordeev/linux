@@ -1137,6 +1137,9 @@ static void nvme_cancel_ios(struct nvme_queue *nvmeq, bool timeout)
 
 static void nvme_free_queue(struct nvme_queue *nvmeq)
 {
+	struct nvme_dev *dev = nvmeq->dev;
+	int qid = nvmeq->qid;
+
 	spin_lock_irq(&nvmeq->q_lock);
 	while (bio_list_peek(&nvmeq->sq_cong)) {
 		struct bio *bio = bio_list_pop(&nvmeq->sq_cong);
@@ -1149,17 +1152,17 @@ static void nvme_free_queue(struct nvme_queue *nvmeq)
 	dma_free_coherent(nvmeq->q_dmadev, SQ_SIZE(nvmeq->q_depth),
 					nvmeq->sq_cmds, nvmeq->sq_dma_addr);
 	kfree(nvmeq);
+
+	dev->queue_count--;
+	dev->queues[qid] = NULL;
 }
 
 static void nvme_free_queues(struct nvme_dev *dev, int lowest)
 {
 	int i;
 
-	for (i = dev->queue_count - 1; i >= lowest; i--) {
+	for (i = dev->queue_count - 1; i >= lowest; i--)
 		nvme_free_queue(dev->queues[i]);
-		dev->queue_count--;
-		dev->queues[i] = NULL;
-	}
 }
 
 /**
@@ -1245,6 +1248,8 @@ static struct nvme_queue *nvme_alloc_queue(struct nvme_dev *dev, int qid,
 	nvmeq->cq_vector = vector;
 	nvmeq->qid = qid;
 	nvmeq->q_suspended = 1;
+
+	dev->queues[qid] = nvmeq;
 	dev->queue_count++;
 
 	return nvmeq;
@@ -1394,7 +1399,6 @@ static int nvme_configure_admin_queue(struct nvme_dev *dev)
 		nvmeq = nvme_alloc_queue(dev, 0, 64, 0);
 		if (!nvmeq)
 			return -ENOMEM;
-		dev->queues[0] = nvmeq;
 	}
 
 	aqa = nvmeq->q_depth - 1;
@@ -1951,8 +1955,6 @@ static int nvme_setup_io_queues(struct nvme_dev *dev)
 		spin_unlock_irq(&nvmeq->q_lock);
 
 		nvme_free_queue(nvmeq);
-		dev->queue_count--;
-		dev->queues[i] = NULL;
 	}
 	spin_unlock(&dev_list_lock);
 
@@ -2439,8 +2441,6 @@ static void nvme_remove_disks(struct work_struct *ws)
 	for (i = dev->queue_count - 1; i > 0; i--) {
 		BUG_ON(!dev->queues[i] || !dev->queues[i]->q_suspended);
 		nvme_free_queue(dev->queues[i]);
-		dev->queue_count--;
-		dev->queues[i] = NULL;
 	}
 	spin_unlock(&dev_list_lock);
 }
