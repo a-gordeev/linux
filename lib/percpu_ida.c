@@ -87,20 +87,20 @@ static inline void steal_tags(struct percpu_ida *pool,
 		pool->cpu_last_stolen = cpu;
 		remote = per_cpu_ptr(pool->tag_cpu, cpu);
 
-		cpumask_clear_cpu(cpu, &pool->cpus_have_tags);
-
-		if (remote == tags)
+		if (remote == tags) {
+			cpumask_clear_cpu(cpu, &pool->cpus_have_tags);
 			continue;
+		}
 
 		spin_lock(&remote->lock);
 
 		if (remote->nr_free) {
-			memcpy(tags->freelist,
-			       remote->freelist,
-			       sizeof(unsigned) * remote->nr_free);
-
-			tags->nr_free = remote->nr_free;
-			remote->nr_free = 0;
+			const struct percpu_ida *p = pool;
+			move_tags(tags->freelist, &tags->nr_free,
+				  remote->freelist, &remote->nr_free,
+				  min(remote->nr_free, p->percpu_batch_size));
+			if (!remote->nr_free)
+				cpumask_clear_cpu(cpu, &pool->cpus_have_tags);
 		}
 
 		spin_unlock(&remote->lock);
