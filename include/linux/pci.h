@@ -1184,6 +1184,7 @@ void pci_disable_msix(struct pci_dev *dev);
 void msi_remove_pci_irq_vectors(struct pci_dev *dev);
 void pci_restore_msi_state(struct pci_dev *dev);
 int pci_msi_enabled(void);
+int pci_enable_msi_partial(struct pci_dev *dev, int nvec, int nvec_mme);
 int pci_enable_msi_range(struct pci_dev *dev, int minvec, int maxvec);
 static inline int pci_enable_msi_exact(struct pci_dev *dev, int nvec)
 {
@@ -1215,6 +1216,8 @@ static inline void pci_disable_msix(struct pci_dev *dev) { }
 static inline void msi_remove_pci_irq_vectors(struct pci_dev *dev) { }
 static inline void pci_restore_msi_state(struct pci_dev *dev) { }
 static inline int pci_msi_enabled(void) { return 0; }
+static int pci_enable_msi_partial(struct pci_dev *dev, int nvec, int nvec_mme)
+{ return -ENOSYS; }
 static inline int pci_enable_msi_range(struct pci_dev *dev, int minvec,
 				       int maxvec)
 { return -ENOSYS; }

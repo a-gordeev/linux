@@ -178,7 +178,7 @@ msi_irq_allocated:
 	return 0;
 }
 
-int arch_setup_msi_irqs(struct pci_dev *dev, int nvec, int type)
+int arch_setup_msi_irqs(struct pci_dev *dev, int nvec, int nvec_mme, int type)
 {
 	struct msi_desc *entry;
 	int ret;

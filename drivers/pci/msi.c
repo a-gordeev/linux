@@ -56,7 +56,8 @@ void __weak arch_teardown_msi_irq(unsigned int irq)
 	chip->teardown_irq(chip, irq);
 }
 
-int __weak arch_msi_check_device(struct pci_dev *dev, int nvec, int type)
+int __weak arch_msi_check_device(struct pci_dev *dev,
+				 int nvec, int nvec_mme, int type)
 {
 	struct msi_chip *chip = dev->bus->msi;
 
@@ -66,7 +67,8 @@ int __weak arch_msi_check_device(struct pci_dev *dev, int nvec, int type)
 	return chip->check_device(chip, dev, nvec, type);
 }
 
-int __weak arch_setup_msi_irqs(struct pci_dev *dev, int nvec, int type)
+int __weak arch_setup_msi_irqs(struct pci_dev *dev,
+			       int nvec, int nvec_mme, int type)
 {
 	struct msi_desc *entry;
 	int ret;
@@ -598,6 +600,7 @@ error_attrs:
  * msi_capability_init - configure device's MSI capability structure
  * @dev: pointer to the pci_dev data structure of MSI device function
  * @nvec: number of interrupts to allocate
+ * @nvec_mme: number of interrupts to write to Multiple Message Enable register
  *
  * Setup the MSI capability structure of the device with the requested
  * number of interrupts.  A return value of zero indicates the successful
@@ -605,7 +608,7 @@ error_attrs:
  * an error, and a positive return value indicates the number of interrupts
  * which could have been allocated.
  */
-static int msi_capability_init(struct pci_dev *dev, int nvec)
+static int msi_capability_init(struct pci_dev *dev, int nvec, int nvec_mme)
 {
 	struct msi_desc *entry;
 	int ret;
@@ -640,7 +643,7 @@ static int msi_capability_init(struct pci_dev *dev, int nvec)
 	list_add_tail(&entry->list, &dev->msi_list);
 
 	/* Configure MSI capability structure */
-	ret = arch_setup_msi_irqs(dev, nvec, PCI_CAP_ID_MSI);
+	ret = arch_setup_msi_irqs(dev, nvec, nvec_mme, PCI_CAP_ID_MSI);
 	if (ret) {
 		msi_mask_irq(entry, mask, ~mask);
 		free_msi_irqs(dev);
@@ -758,7 +761,8 @@ static int msix_capability_init(struct pci_dev *dev,
 	if (ret)
 		return ret;
 
-	ret = arch_setup_msi_irqs(dev, nvec, PCI_CAP_ID_MSIX);
+	/* Parameter 'nvec_mme' does not make sense in case of MSI-X */
+	ret = arch_setup_msi_irqs(dev, nvec, 0, PCI_CAP_ID_MSIX);
 	if (ret)
 		goto out_avail;
 
@@ -812,13 +816,15 @@ out_free:
  * pci_msi_check_device - check whether MSI may be enabled on a device
  * @dev: pointer to the pci_dev data structure of MSI device function
  * @nvec: how many MSIs have been requested ?
+ * @nvec_mme: how many MSIs write to Multiple Message Enable register ?
  * @type: are we checking for MSI or MSI-X ?
  *
  * Look at global flags, the device itself, and its parent buses
  * to determine if MSI/-X are supported for the device. If MSI/-X is
  * supported return 0, else return an error code.
  **/
-static int pci_msi_check_device(struct pci_dev *dev, int nvec, int type)
+static int pci_msi_check_device(struct pci_dev *dev,
+				int nvec, int nvec_mme, int type)
 {
 	struct pci_bus *bus;
 	int ret;
@@ -846,7 +852,7 @@ static int pci_msi_check_device(struct pci_dev *dev, int nvec, int type)
 		if (bus->bus_flags & PCI_BUS_FLAGS_NO_MSI)
 			return -EINVAL;
 
-	ret = arch_msi_check_device(dev, nvec, type);
+	ret = arch_msi_check_device(dev, nvec, nvec_mme, type);
 	if (ret)
 		return ret;
 
@@ -877,6 +883,62 @@ int pci_msi_vec_count(struct pci_dev *dev)
 	return ret;
 }
 EXPORT_SYMBOL(pci_msi_vec_count);
+
+/**
+ * pci_enable_msi_partial - configure device's MSI capability structure
+ * @dev: device to configure
+ * @nvec: number of interrupts to configure
+ * @nvec_mme: number of interrupts to write to Multiple Message Enable register
+ *
+ * This function tries to allocate @nvec number of interrupts while setup
+ * device's Multiple Message Enable register with @nvec_mme interrupts.
+ * It returns a negative errno if an error occurs. If it succeeds, it returns
+ * zero and updates the @dev's irq member to the lowest new interrupt number;
+ * the other interrupt numbers allocated to this device are consecutive.
+ */
+int pci_enable_msi_partial(struct pci_dev *dev, int nvec, int nvec_mme)
+{
+	int maxvec;
+	int rc;
+
+	if (dev->current_state != PCI_D0)
+		return -EINVAL;
+
+	WARN_ON(!!dev->msi_enabled);
+
+	/* Check whether driver already requested MSI-X irqs */
+	if (dev->msix_enabled) {
+		dev_info(&dev->dev, "can't enable MSI "
+			 "(MSI-X already enabled)\n");
+		return -EINVAL;
+	}
+
+	if (!is_power_of_2(nvec_mme))
+		return -EINVAL;
+	if (nvec > nvec_mme)
+		return -EINVAL;
+
+	maxvec = pci_msi_vec_count(dev);
+	if (maxvec < 0)
+		return maxvec;
+	else if (nvec_mme > maxvec)
+		return -EINVAL;
+
+	rc = pci_msi_check_device(dev, nvec, nvec_mme, PCI_CAP_ID_MSI);
+	if (rc < 0)
+		return rc;
+	else if (rc > 0)
+		return -ENOSPC;
+
+	rc = msi_capability_init(dev, nvec, nvec_mme);
+	if (rc < 0)
+		return rc;
+	else if (rc > 0)
+		return -ENOSPC;
+
+	return 0;
+}
+EXPORT_SYMBOL(pci_enable_msi_partial);
 
 void pci_msi_shutdown(struct pci_dev *dev)
 {
@@ -957,7 +1019,7 @@ int pci_enable_msix(struct pci_dev *dev, struct msix_entry *entries, int nvec)
 	if (!entries || !dev->msix_cap || dev->current_state != PCI_D0)
 		return -EINVAL;
 
-	status = pci_msi_check_device(dev, nvec, PCI_CAP_ID_MSIX);
+	status = pci_msi_check_device(dev, nvec, 0, PCI_CAP_ID_MSIX);
 	if (status)
 		return status;
 
@@ -1110,7 +1172,8 @@ int pci_enable_msi_range(struct pci_dev *dev, int minvec, int maxvec)
 		nvec = maxvec;
 
 	do {
-		rc = pci_msi_check_device(dev, nvec, PCI_CAP_ID_MSI);
+		rc = pci_msi_check_device(dev, nvec, roundup_pow_of_two(nvec),
+					  PCI_CAP_ID_MSI);
 		if (rc < 0) {
 			return rc;
 		} else if (rc > 0) {
@@ -1121,7 +1184,7 @@ int pci_enable_msi_range(struct pci_dev *dev, int minvec, int maxvec)
 	} while (rc);
 
 	do {
-		rc = msi_capability_init(dev, nvec);
+		rc = msi_capability_init(dev, nvec, roundup_pow_of_two(nvec));
 		if (rc < 0) {
 			return rc;
 		} else if (rc > 0) {
