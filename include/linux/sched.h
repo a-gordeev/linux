@@ -2934,4 +2934,9 @@ static inline unsigned long rlimit_max(unsigned int limit)
 	return task_rlimit_max(current, limit);
 }
 
+DECLARE_PER_CPU(struct cpumask **, sd_tlm);
+
+#define for_each_tlm(tlm)					\
+	for ((tlm) = this_cpu_read(sd_tlm); *(tlm); (tlm)++)
+
 #endif

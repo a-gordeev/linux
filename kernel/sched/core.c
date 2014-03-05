@@ -5451,6 +5451,18 @@ static void destroy_sched_domains(struct sched_domain *sd, int cpu)
 		destroy_sched_domain(sd, cpu);
 }
 
+static void destroy_topology_level_masks(struct cpumask **tlm)
+{
+	if (tlm) {
+		struct cpumask **masks;
+
+		for (masks = tlm; *masks; masks++)
+			kfree(*masks);
+
+		kfree(tlm);
+	}
+}
+
 /*
  * Keep a special pointer to the highest sched_domain that has
  * SD_SHARE_PKG_RESOURCE set (Last Level Cache Domain) for this
@@ -5491,6 +5503,67 @@ static void update_top_cache_domain(int cpu)
 
 	sd = highest_flag_domain(cpu, SD_ASYM_PACKING);
 	rcu_assign_pointer(per_cpu(sd_asym, cpu), sd);
+}
+
+DEFINE_PER_CPU(struct cpumask **, sd_tlm);
+
+static struct cpumask **
+build_topology_level_masks(struct sched_domain *domain, int cpu)
+{
+	struct sched_domain *sd;
+	struct cpumask **ret;
+	struct cpumask *mask;
+	struct cpumask *prev;
+	int node = cpu_to_node(cpu);
+	int ndoms = 0;
+	int level = 0;
+
+	prev = kzalloc(cpumask_size(), GFP_KERNEL);
+	if (!prev)
+		return NULL;
+
+	for (sd = domain; sd; sd = sd->parent) {
+		if (sd->parent && cpumask_equal(sched_domain_span(sd->parent),
+						sched_domain_span(sd)))
+			continue;
+		ndoms++;
+	}
+
+	ret = kzalloc_node((ndoms + 1) * sizeof(ret[0]), GFP_KERNEL, node);
+	if (!ret)
+		goto err;
+
+	for (sd = domain; sd; sd = sd->parent) {
+		if (sd->parent && cpumask_equal(sched_domain_span(sd->parent),
+						sched_domain_span(sd)))
+			continue;
+
+		if (cpumask_equal(sched_domain_span(sd), prev))
+			break;
+
+		mask = kzalloc_node(cpumask_size(), GFP_KERNEL, node);
+		if (!mask)
+			goto err;
+
+		cpumask_andnot(mask, sched_domain_span(sd), prev);
+		cpumask_or(prev, prev, sched_domain_span(sd));
+
+		ret[level] = mask;
+		level++;
+	}
+
+	WARN_ON_ONCE(level != ndoms);
+
+err:
+	kfree(prev);
+	return ret;
+}
+
+static void cpu_attach_topology_level_masks(struct cpumask **masks, int cpu)
+{
+	struct cpumask **tmp = per_cpu(sd_tlm, cpu);
+	per_cpu(sd_tlm, cpu) = masks;
+	destroy_topology_level_masks(tmp);
 }
 
 /*
@@ -5569,6 +5642,7 @@ struct sd_data {
 
 struct s_data {
 	struct sched_domain ** __percpu sd;
+	struct cpumask *** __percpu masks;
 	struct root_domain	*rd;
 };
 
@@ -5894,6 +5968,7 @@ static void __free_domain_allocs(struct s_data *d, enum s_alloc what,
 		if (!atomic_read(&d->rd->refcount))
 			free_rootdomain(&d->rd->rcu); /* fall through */
 	case sa_sd:
+		free_percpu(d->masks);
 		free_percpu(d->sd); /* fall through */
 	case sa_sd_storage:
 		__sdt_free(cpu_map); /* fall through */
@@ -5912,6 +5987,9 @@ static enum s_alloc __visit_domain_allocation_hell(struct s_data *d,
 	d->sd = alloc_percpu(struct sched_domain *);
 	if (!d->sd)
 		return sa_sd_storage;
+	d->masks = alloc_percpu(struct cpumask **);
+	if (!d->masks)
+		return sa_sd;
 	d->rd = alloc_rootdomain();
 	if (!d->rd)
 		return sa_sd;
@@ -6373,6 +6451,7 @@ static int build_sched_domains(const struct cpumask *cpu_map,
 {
 	enum s_alloc alloc_state;
 	struct sched_domain *sd;
+	struct cpumask **masks;
 	struct s_data d;
 	int i, ret = -ENOMEM;
 
@@ -6421,11 +6500,21 @@ static int build_sched_domains(const struct cpumask *cpu_map,
 		}
 	}
 
+	/* Build topology level plain masks for the domains */
+	for_each_cpu(i, cpu_map) {
+		sd = *per_cpu_ptr(d.sd, i);
+		masks = build_topology_level_masks(sd, i);
+		*per_cpu_ptr(d.masks, i) = masks;
+	}
+
 	/* Attach the domains */
 	rcu_read_lock();
 	for_each_cpu(i, cpu_map) {
 		sd = *per_cpu_ptr(d.sd, i);
 		cpu_attach_domain(sd, d.rd, i);
+
+		masks = *per_cpu_ptr(d.masks, i);
+		cpu_attach_topology_level_masks(masks, i);
 	}
 	rcu_read_unlock();
 
