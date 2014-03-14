@@ -40,7 +40,6 @@ struct percpu_ida {
 		 * we want to pick a cpu at random. Cycling through them every
 		 * time we steal is a bit easier and more or less equivalent:
 		 */
-		unsigned		cpu_last_stolen;
 
 		/* For sleeping on allocation failure */
 		wait_queue_head_t	wait;

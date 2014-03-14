@@ -63,42 +63,34 @@ static inline void move_tags(unsigned *dst, unsigned *dst_nr,
 static inline void steal_tags(struct percpu_ida *pool,
 			      struct percpu_ida_cpu *tags)
 {
-	unsigned cpus_have_tags, cpu = pool->cpu_last_stolen;
 	struct percpu_ida_cpu *remote;
+	struct cpumask **tlm;
+	int cpu;
 
-	for (cpus_have_tags = cpumask_weight(&pool->cpus_have_tags);
-	     cpus_have_tags; cpus_have_tags--) {
-		cpu = cpumask_next(cpu, &pool->cpus_have_tags);
+	for_each_tlm(tlm) {
+		for_each_cpu_and(cpu, *tlm, &pool->cpus_have_tags) {
+			cpumask_clear_cpu(cpu, &pool->cpus_have_tags);
 
-		if (cpu >= nr_cpu_ids) {
-			cpu = cpumask_first(&pool->cpus_have_tags);
-			if (cpu >= nr_cpu_ids)
-				BUG();
+			remote = per_cpu_ptr(pool->tag_cpu, cpu);
+			if (remote == tags)
+				continue;
+
+			spin_lock(&remote->lock);
+
+			if (remote->nr_free) {
+				memcpy(tags->freelist,
+				       remote->freelist,
+				       sizeof(unsigned) * remote->nr_free);
+
+				tags->nr_free = remote->nr_free;
+				remote->nr_free = 0;
+			}
+
+			spin_unlock(&remote->lock);
+
+			if (tags->nr_free)
+				return;
 		}
-
-		pool->cpu_last_stolen = cpu;
-		remote = per_cpu_ptr(pool->tag_cpu, cpu);
-
-		cpumask_clear_cpu(cpu, &pool->cpus_have_tags);
-
-		if (remote == tags)
-			continue;
-
-		spin_lock(&remote->lock);
-
-		if (remote->nr_free) {
-			memcpy(tags->freelist,
-			       remote->freelist,
-			       sizeof(unsigned) * remote->nr_free);
-
-			tags->nr_free = remote->nr_free;
-			remote->nr_free = 0;
-		}
-
-		spin_unlock(&remote->lock);
-
-		if (tags->nr_free)
-			break;
 	}
 }
 
