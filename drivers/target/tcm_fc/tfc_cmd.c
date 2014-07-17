@@ -28,7 +28,7 @@
 #include <linux/configfs.h>
 #include <linux/ctype.h>
 #include <linux/hash.h>
-#include <linux/percpu_ida.h>
+#include <linux/percpu_tags.h>
 #include <asm/unaligned.h>
 #include <scsi/scsi.h>
 #include <scsi/scsi_host.h>
@@ -100,7 +100,7 @@ static void ft_free_cmd(struct ft_cmd *cmd)
 	if (fr_seq(fp))
 		lport->tt.seq_release(fr_seq(fp));
 	fc_frame_free(fp);
-	percpu_ida_free(&sess->se_sess->sess_tag_pool, cmd->se_cmd.map_tag);
+	percpu_tags_free(&sess->se_sess->sess_tag_pool, cmd->se_cmd.map_tag);
 	ft_sess_put(sess);	/* undo get from lookup at recv */
 }
 
@@ -456,7 +456,7 @@ static void ft_recv_cmd(struct ft_sess *sess, struct fc_frame *fp)
 	struct se_session *se_sess = sess->se_sess;
 	int tag;
 
-	tag = percpu_ida_alloc(&se_sess->sess_tag_pool, TASK_RUNNING);
+	tag = percpu_tags_alloc(&se_sess->sess_tag_pool, TASK_RUNNING);
 	if (tag < 0)
 		goto busy;
 
@@ -467,7 +467,7 @@ static void ft_recv_cmd(struct ft_sess *sess, struct fc_frame *fp)
 	cmd->sess = sess;
 	cmd->seq = lport->tt.seq_assign(lport, fp);
 	if (!cmd->seq) {
-		percpu_ida_free(&se_sess->sess_tag_pool, tag);
+		percpu_tags_free(&se_sess->sess_tag_pool, tag);
 		goto busy;
 	}
 	cmd->req_frame = fp;		/* hold frame during cmd */
