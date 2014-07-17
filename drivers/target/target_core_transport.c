@@ -272,7 +272,7 @@ int transport_alloc_session_tags(struct se_session *se_sess,
 		}
 	}
 
-	rc = percpu_ida_init(&se_sess->sess_tag_pool, tag_num);
+	rc = percpu_tags_init(&se_sess->sess_tag_pool, tag_num);
 	if (rc < 0) {
 		pr_err("Unable to init se_sess->sess_tag_pool,"
 			" tag_num: %u\n", tag_num);
@@ -445,7 +445,7 @@ EXPORT_SYMBOL(transport_deregister_session_configfs);
 void transport_free_session(struct se_session *se_sess)
 {
 	if (se_sess->sess_cmd_map) {
-		percpu_ida_destroy(&se_sess->sess_tag_pool);
+		percpu_tags_destroy(&se_sess->sess_tag_pool);
 		if (is_vmalloc_addr(se_sess->sess_cmd_map))
 			vfree(se_sess->sess_cmd_map);
 		else
