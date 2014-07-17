@@ -17,7 +17,7 @@
  ******************************************************************************/
 
 #include <linux/list.h>
-#include <linux/percpu_ida.h>
+#include <linux/percpu_tags.h>
 #include <scsi/scsi_tcq.h>
 #include <scsi/iscsi_proto.h>
 #include <target/target_core_base.h>
@@ -158,7 +158,7 @@ struct iscsi_cmd *iscsit_allocate_cmd(struct iscsi_conn *conn, int state)
 	struct se_session *se_sess = conn->sess->se_sess;
 	int size, tag;
 
-	tag = percpu_ida_alloc(&se_sess->sess_tag_pool, state);
+	tag = percpu_tags_alloc(&se_sess->sess_tag_pool, state);
 	if (tag < 0)
 		return NULL;
 
@@ -701,7 +701,7 @@ void iscsit_release_cmd(struct iscsi_cmd *cmd)
 	kfree(cmd->iov_data);
 	kfree(cmd->text_in_ptr);
 
-	percpu_ida_free(&sess->se_sess->sess_tag_pool, se_cmd->map_tag);
+	percpu_tags_free(&sess->se_sess->sess_tag_pool, se_cmd->map_tag);
 }
 EXPORT_SYMBOL(iscsit_release_cmd);
 
