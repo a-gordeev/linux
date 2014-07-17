@@ -5,7 +5,7 @@
 #include <linux/configfs.h>
 #include <linux/dma-mapping.h>
 #include <linux/blkdev.h>
-#include <linux/percpu_ida.h>
+#include <linux/percpu_tags.h>
 #include <scsi/scsi_cmnd.h>
 #include <net/sock.h>
 #include <net/tcp.h>
@@ -620,7 +620,7 @@ struct se_session {
 	spinlock_t		sess_cmd_lock;
 	struct kref		sess_kref;
 	void			*sess_cmd_map;
-	struct percpu_ida	sess_tag_pool;
+	struct percpu_tags	sess_tag_pool;
 };
 
 struct se_device;
