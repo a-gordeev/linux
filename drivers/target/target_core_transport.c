@@ -272,7 +272,7 @@ int transport_alloc_session_tags(struct se_session *se_sess,
 		}
 	}
 
-	rc = percpu_tags_init(&se_sess->sess_tag_pool, tag_num);
+	rc = percpu_tags_init(&se_sess->sess_tag_pool, tag_num, "se_sess");
 	if (rc < 0) {
 		pr_err("Unable to init se_sess->sess_tag_pool,"
 			" tag_num: %u\n", tag_num);

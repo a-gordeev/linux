@@ -128,9 +128,16 @@ static int batch_size(int nr_cache)
 	return max(1, min(PERCPU_TAGS_BATCH_MAX, nr_cache / 4));
 }
 
+static void stat_cache_size(struct percpu_tags_stat *stat, int cache_size)
+{
+	atomic_add(cache_size, &stat->cache_size);
+	atomic_inc(&stat->nr_cache_size);
+}
+
 static int cache_size(struct percpu_tags *pt)
 {
 	int weight;
+	int ret;
 
 	/*
 	 * Bitmask percpu_tags::alloc_tags is used to indicate the number
@@ -141,9 +148,13 @@ static int cache_size(struct percpu_tags *pt)
 	weight = cpumask_weight(&pt->alloc_tags);
 
 	if (weight)
-		return pt->nr_tags / weight;
+		ret = pt->nr_tags / weight;
 	else
-		return pt->nr_tags;
+		ret = pt->nr_tags;
+
+	stat_cache_size(&pt->stat, ret);
+
+	return ret;
 }
 
 static int alloc_tag_local(struct percpu_tags *pt)
@@ -510,12 +521,70 @@ void percpu_tags_free(struct percpu_tags *pt, int tag)
 }
 EXPORT_SYMBOL_GPL(percpu_tags_free);
 
-int percpu_tags_init(struct percpu_tags *pt, int nr_tags)
+static ssize_t pt_sysfs_show(struct kobject *kobj, struct attribute *attr,
+			     char *buf)
+{
+ 	char *orig_buf = buf;
+	int cache_size, nr_cache_size;
+	struct percpu_tags *pt = container_of(kobj, struct percpu_tags, kobj);
+
+	cache_size = atomic_read(&pt->stat.cache_size);
+	nr_cache_size = atomic_read(&pt->stat.nr_cache_size);
+	nr_cache_size = max(nr_cache_size, 1);
+
+	buf += sprintf(buf, "cache_size=%d, nr_cache_size=%d, average=%d\n",
+		       cache_size, nr_cache_size, cache_size / nr_cache_size);
+
+	return buf - orig_buf;
+}
+
+static ssize_t pt_sysfs_store(struct kobject *kobj, struct attribute *attr,
+			      const char *buf, size_t count)
+{
+	struct percpu_tags *pt = container_of(kobj, struct percpu_tags, kobj);
+	atomic_set(&pt->stat.cache_size, 0);
+	atomic_set(&pt->stat.nr_cache_size, 0);
+
+	return count;
+}
+
+static void pt_sysfs_release(struct kobject *kobj)
+{
+}
+
+static const struct sysfs_ops pt_sysfs_ops = {
+	.show	= pt_sysfs_show,
+	.store	= pt_sysfs_store,
+};
+
+static struct attribute pt_attrs = {
+	.name = "tags",
+	.mode = S_IRUGO | S_IWUGO,
+};
+
+static struct attribute *default_pt_attrs[] = {
+	&pt_attrs,
+	NULL
+};
+
+static struct kobj_type pt_ktype = {
+	.sysfs_ops	= &pt_sysfs_ops,
+	.default_attrs	= default_pt_attrs,
+	.release	= pt_sysfs_release,
+};
+
+int percpu_tags_init(struct percpu_tags *pt, int nr_tags, char *name)
 {
 	struct percpu_cache *tags;
 	int order;
 	int cpu;
 	int i;
+	int rc;
+
+	kobject_init(&pt->kobj, &pt_ktype);
+	rc = kobject_add(&pt->kobj, kernel_kobj, name);
+	if (rc)
+		return rc;
 
 	order = get_order(nr_tags * sizeof(pt->tag_cpu_map[0]));
 	pt->tag_cpu_map = (int*)__get_free_pages(GFP_KERNEL, order);
@@ -563,6 +632,9 @@ int percpu_tags_for_each_free(struct percpu_tags *pt,
 	unsigned long flags;
 	struct percpu_cache *remote;
 	unsigned cpu, i, err = 0;
+
+	kobject_del(&pt->kobj);
+	kobject_put(&pt->kobj);
 
 	local_irq_save(flags);
 	for_each_possible_cpu(cpu) {
