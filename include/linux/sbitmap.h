@@ -1,6 +1,8 @@
 #ifndef INT_SBITMAP_H
 #define INT_SBITMAP_H
 
+#include <linux/wait.h>
+
 enum {
 	SBM_WAIT_QUEUES	= 8,
 	SBM_WAIT_BATCH	= 8,

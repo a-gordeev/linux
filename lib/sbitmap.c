@@ -112,7 +112,7 @@ static struct bt_wait_state *bt_wait_ptr(struct sbitmap *bt)
 	return &bt->bs[0];
 }
 
-int sbitmap_get(struct sbitmap *bt, int gfp)
+int sbitmap_get(struct sbitmap *bt, int state)
 {
 	struct bt_wait_state *bs;
 	DEFINE_WAIT(wait);
@@ -122,12 +122,12 @@ int sbitmap_get(struct sbitmap *bt, int gfp)
 	if (tag != -1)
 		return tag;
 
-	if (!(gfp & __GFP_WAIT))
+	if (state != TASK_RUNNING)
 		return -ENOSPC;
 
 	bs = bt_wait_ptr(bt);
 	do {
-		prepare_to_wait(&bs->wait, &wait, TASK_UNINTERRUPTIBLE);
+		prepare_to_wait(&bs->wait, &wait, state);
 
 		tag = bt_get(bt);
 		if (tag != -1)
@@ -142,6 +142,7 @@ int sbitmap_get(struct sbitmap *bt, int gfp)
 	finish_wait(&bs->wait, &wait);
 	return tag;
 }
+EXPORT_SYMBOL_GPL(sbitmap_get);
 
 static struct bt_wait_state *bt_wake_ptr(struct sbitmap *bt)
 {
@@ -195,6 +196,7 @@ wake:
 			goto wake;
 	}
 }
+EXPORT_SYMBOL_GPL(sbitmap_put);
 
 static void bt_update_count(struct sbitmap *bt, unsigned int depth)
 {
@@ -276,6 +278,7 @@ err_map:
 err_sbm:
 	return NULL;
 }
+EXPORT_SYMBOL_GPL(sbitmap_alloc);
 
 void sbitmap_free(struct sbitmap *sbm)
 {
@@ -284,3 +287,4 @@ void sbitmap_free(struct sbitmap *sbm)
 	kfree(sbm->map);
 	kfree(sbm);
 }
+EXPORT_SYMBOL_GPL(sbitmap_free);

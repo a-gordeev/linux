@@ -260,7 +260,6 @@ EXPORT_SYMBOL(transport_init_session);
 int transport_alloc_session_tags(struct se_session *se_sess,
 			         unsigned int tag_num, unsigned int tag_size)
 {
-	int rc;
 
 	se_sess->sess_cmd_map = kzalloc(tag_num * tag_size,
 					GFP_KERNEL | __GFP_NOWARN | __GFP_REPEAT);
@@ -272,8 +271,8 @@ int transport_alloc_session_tags(struct se_session *se_sess,
 		}
 	}
 
-	rc = percpu_tags_init(&se_sess->sess_tag_pool, tag_num);
-	if (rc < 0) {
+	se_sess->sess_tag_pool = sbitmap_alloc(tag_num, NUMA_NO_NODE);
+	if (!se_sess->sess_tag_pool) {
 		pr_err("Unable to init se_sess->sess_tag_pool,"
 			" tag_num: %u\n", tag_num);
 		if (is_vmalloc_addr(se_sess->sess_cmd_map))
@@ -445,7 +444,7 @@ EXPORT_SYMBOL(transport_deregister_session_configfs);
 void transport_free_session(struct se_session *se_sess)
 {
 	if (se_sess->sess_cmd_map) {
-		percpu_tags_destroy(&se_sess->sess_tag_pool);
+		sbitmap_free(&se_sess->sess_tag_pool);
 		if (is_vmalloc_addr(se_sess->sess_cmd_map))
 			vfree(se_sess->sess_cmd_map);
 		else
