@@ -166,11 +166,12 @@ static void __rcu_process_callbacks(struct rcu_ctrlblk *rcp)
 	const char *rn = NULL;
 	struct rcu_head *next, *list;
 	unsigned long flags;
+	RCU_TRACE(long qlen);
 	RCU_TRACE(int cb_count = 0);
 
 	/* Move the ready-to-invoke callbacks to a local list. */
 	local_irq_save(flags);
-	RCU_TRACE(trace_rcu_batch_start(rcp->name, 0, rcp->qlen, -1));
+	RCU_TRACE(qlen = rcp->qlen);
 	list = rcp->rcucblist;
 	rcp->rcucblist = *rcp->donetail;
 	*rcp->donetail = NULL;
@@ -180,6 +181,7 @@ static void __rcu_process_callbacks(struct rcu_ctrlblk *rcp)
 	local_irq_restore(flags);
 
 	/* Invoke the callbacks on the local list. */
+	RCU_TRACE(trace_rcu_batch_start(rcp->name, 0, qlen, -1));
 	RCU_TRACE(rn = rcp->name);
 	while (list) {
 		next = list->next;
