@@ -192,8 +192,8 @@ int of_pci_get_host_bridge_resources(struct device_node *dev,
 		pr_info("  No bus range found for %s, using %pR\n",
 			dev->full_name, bus_range);
 	} else {
-		if (bus_range->end > bus_range->start + bus_max)
-			bus_range->end = bus_range->start + bus_max;
+		if (bus_range->end > bus_max)
+			bus_range->end = bus_max;
 	}
 	pci_add_resource(resources, bus_range);
 
