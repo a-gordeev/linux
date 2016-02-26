@@ -3205,10 +3205,8 @@ static void __sched notrace __schedule(bool preempt)
 	struct task_struct *prev, *next;
 	unsigned long *switch_count;
 	struct rq *rq;
-	int cpu;
 
-	cpu = smp_processor_id();
-	rq = cpu_rq(cpu);
+	rq = this_rq();
 	prev = rq->curr;
 
 	/*
@@ -3280,7 +3278,6 @@ static void __sched notrace __schedule(bool preempt)
 
 		trace_sched_switch(preempt, prev, next);
 		rq = context_switch(rq, prev, next); /* unlocks the rq */
-		cpu = cpu_of(rq);
 	} else {
 		lockdep_unpin_lock(&rq->lock);
 		raw_spin_unlock_irq(&rq->lock);
