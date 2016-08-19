@@ -44,7 +44,7 @@ static inline struct blk_flush_queue *blk_get_flush_queue(
 	if (!q->mq_ops)
 		return q->fq;
 
-	hctx = q->mq_ops->map_queue(q, ctx->cpu);
+	hctx = blk_mq_map_queue(q, ctx->cpu);
 
 	return hctx->fq;
 }
