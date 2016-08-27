@@ -1928,7 +1928,6 @@ static void blk_mq_realloc_hw_ctxs(struct blk_mq_tag_set *set,
 
 		atomic_set(&hctxs[i]->nr_active, 0);
 		hctxs[i]->numa_node = node;
-		hctxs[i]->queue_num = i;
 
 		if (blk_mq_init_hctx(q, set, hctxs[i], i)) {
 			free_cpumask_var(hctxs[i]->cpumask);
