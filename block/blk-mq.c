@@ -1633,12 +1633,8 @@ static int blk_mq_init_hctx(struct request_queue *q,
 		struct blk_mq_tag_set *set,
 		struct blk_mq_hw_ctx *hctx, unsigned hctx_idx)
 {
-	int node;
+	int node = hctx->numa_node;
 	unsigned flush_start_tag = set->queue_depth;
-
-	node = hctx->numa_node;
-	if (node == NUMA_NO_NODE)
-		node = hctx->numa_node = set->numa_node;
 
 	INIT_WORK(&hctx->run_work, blk_mq_run_work_fn);
 	INIT_DELAYED_WORK(&hctx->delay_work, blk_mq_delay_work_fn);
@@ -1914,6 +1910,9 @@ static void blk_mq_realloc_hw_ctxs(struct blk_mq_tag_set *set,
 			continue;
 
 		node = blk_mq_hw_queue_to_node(q->mq_map, i);
+		if (node == NUMA_NO_NODE)
+			node = set->numa_node;
+
 		hctxs[i] = kzalloc_node(sizeof(struct blk_mq_hw_ctx),
 					GFP_KERNEL, node);
 		if (!hctxs[i])
