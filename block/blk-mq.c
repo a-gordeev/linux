@@ -2009,7 +2009,7 @@ static void blk_mq_realloc_hw_ctxs(struct blk_mq_tag_set *set,
 		if (!hctx)
 			continue;
 
-		kobject_put(&hctx->kobj);
+		blk_mq_hctx_kobj_put(hctx);
 
 		if (hctx->tags) {
 			blk_mq_free_rq_map(set, hctx->tags, j);
