@@ -838,7 +838,7 @@ static void __blk_mq_run_hw_queue(struct blk_mq_hw_ctx *hctx)
 		bd.list = dptr;
 		bd.last = list_empty(&rq_list);
 
-		ret = q->mq_ops->queue_rq(hctx, &bd);
+		ret = q->mq_ops->queue_rq(&hctx->llhw_ctxs[0], &bd);
 		switch (ret) {
 		case BLK_MQ_RQ_QUEUE_OK:
 			queued++;
@@ -1266,7 +1266,7 @@ static int blk_mq_direct_issue_request(struct request *rq, blk_qc_t *cookie)
 	 * error (busy), just add it to our list as we previously
 	 * would have done
 	 */
-	ret = q->mq_ops->queue_rq(hctx, &bd);
+	ret = q->mq_ops->queue_rq(&hctx->llhw_ctxs[0], &bd);
 	if (ret == BLK_MQ_RQ_QUEUE_OK) {
 		*cookie = new_cookie;
 		return 0;
@@ -1661,6 +1661,8 @@ static void blk_mq_exit_hctx(struct request_queue *q,
 		struct blk_mq_tag_set *set,
 		struct blk_mq_hw_ctx *hctx, unsigned int hctx_idx)
 {
+	int i;
+
 	blk_mq_tag_idle(hctx);
 
 	if (set->ops->exit_request)
@@ -1669,7 +1671,8 @@ static void blk_mq_exit_hctx(struct request_queue *q,
 				       BLK_MQ_MAX_DEPTH + hctx_idx);
 
 	if (set->ops->exit_hctx)
-		set->ops->exit_hctx(hctx, hctx_idx);
+		for (i = 0; i < hctx->nr_llhw_ctx; i++)
+			set->ops->exit_hctx(&hctx->llhw_ctxs[i]);
 
 	blk_mq_unregister_cpu_notifier(&hctx->cpu_notifier);
 	blk_free_flush_queue(hctx->fq);
@@ -1696,13 +1699,16 @@ static struct blk_mq_hw_ctx *blk_mq_init_hctx(struct request_queue *q,
 		struct blk_mq_tag_set *set, unsigned hctx_idx)
 {
 	struct blk_mq_hw_ctx *hctx;
+	unsigned int nr_llhw_ctx = 1;
 	int node;
+	int i;
 
 	node = blk_mq_hw_queue_to_node(q->mq_map, hctx_idx);
 	if (node == NUMA_NO_NODE)
 		node = set->numa_node;
 
-	hctx = kzalloc_node(sizeof(*hctx), GFP_KERNEL, node);
+	hctx = kzalloc_node(sizeof(*hctx) +
+		nr_llhw_ctx * sizeof(hctx->llhw_ctxs[0]), GFP_KERNEL, node);
 	if (!hctx)
 		return NULL;
 
@@ -1734,6 +1740,7 @@ static struct blk_mq_hw_ctx *blk_mq_init_hctx(struct request_queue *q,
 	hctx->queue = q;
 	hctx->queue_num = hctx_idx;
 	hctx->nr_ctx = 0;
+	hctx->nr_llhw_ctx = nr_llhw_ctx;
 	hctx->flags = set->flags & ~BLK_MQ_F_TAG_SHARED;
 	hctx->tags = set->tags[hctx_idx];
 
@@ -1741,9 +1748,16 @@ static struct blk_mq_hw_ctx *blk_mq_init_hctx(struct request_queue *q,
 					blk_mq_hctx_notify, hctx);
 	blk_mq_register_cpu_notifier(&hctx->cpu_notifier);
 
-	if (set->ops->init_hctx &&
-	    set->ops->init_hctx(hctx, set->driver_data, hctx_idx))
-		goto unregister_cpu_notifier;
+	for (i = 0; i < hctx->nr_llhw_ctx; i++) {
+		struct blk_mq_llhw_ctx *llhw_ctx = &hctx->llhw_ctxs[i];
+
+		llhw_ctx->index = i;
+		llhw_ctx->queue_id = hctx_idx;
+
+		if (set->ops->init_hctx &&
+		    set->ops->init_hctx(llhw_ctx, set->driver_data))
+			goto exit_hctx;
+	}
 
 	if (set->ops->init_request &&
 	    set->ops->init_request(set->driver_data,
@@ -1755,8 +1769,8 @@ static struct blk_mq_hw_ctx *blk_mq_init_hctx(struct request_queue *q,
 
  exit_hctx:
 	if (set->ops->exit_hctx)
-		set->ops->exit_hctx(hctx, hctx_idx);
- unregister_cpu_notifier:
+		for (i--; i >= 0; i--)
+			set->ops->exit_hctx(&hctx->llhw_ctxs[i]);
 	blk_mq_unregister_cpu_notifier(&hctx->cpu_notifier);
 	kfree(hctx->fq);
  free_bitmap:

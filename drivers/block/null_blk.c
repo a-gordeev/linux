@@ -351,7 +351,7 @@ static void null_request_fn(struct request_queue *q)
 	}
 }
 
-static int null_queue_rq(struct blk_mq_hw_ctx *hctx,
+static int null_queue_rq(struct blk_mq_llhw_ctx *llhw_ctx,
 			 const struct blk_mq_queue_data *bd)
 {
 	struct nullb_cmd *cmd = blk_mq_rq_to_pdu(bd->rq);
@@ -361,7 +361,7 @@ static int null_queue_rq(struct blk_mq_hw_ctx *hctx,
 		cmd->timer.function = null_cmd_timer_expired;
 	}
 	cmd->rq = bd->rq;
-	cmd->nq = hctx->driver_data;
+	cmd->nq = llhw_ctx->driver_data;
 
 	blk_mq_start_request(bd->rq);
 
@@ -378,13 +378,12 @@ static void null_init_queue(struct nullb *nullb, struct nullb_queue *nq)
 	nq->queue_depth = nullb->queue_depth;
 }
 
-static int null_init_hctx(struct blk_mq_hw_ctx *hctx, void *data,
-			  unsigned int index)
+static int null_init_hctx(struct blk_mq_llhw_ctx *llhw_ctx, void *data)
 {
 	struct nullb *nullb = data;
-	struct nullb_queue *nq = &nullb->queues[index];
+	struct nullb_queue *nq = &nullb->queues[llhw_ctx->queue_id];
 
-	hctx->driver_data = nq;
+	llhw_ctx->driver_data = nq;
 	null_init_queue(nullb, nq);
 	nullb->nr_queues++;
 

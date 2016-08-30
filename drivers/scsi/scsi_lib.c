@@ -1876,9 +1876,10 @@ static void scsi_mq_done(struct scsi_cmnd *cmd)
 	blk_mq_complete_request(cmd->request, cmd->request->errors);
 }
 
-static int scsi_queue_rq(struct blk_mq_hw_ctx *hctx,
+static int scsi_queue_rq(struct blk_mq_llhw_ctx	*llhw_ctx,
 			 const struct blk_mq_queue_data *bd)
 {
+	struct blk_mq_hw_ctx *hctx = blk_mq_to_hctx(llhw_ctx);
 	struct request *req = bd->rq;
 	struct request_queue *q = req->q;
 	struct scsi_device *sdev = q->queuedata;

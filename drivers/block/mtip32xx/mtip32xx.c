@@ -3805,9 +3805,10 @@ static bool mtip_check_unal_depth(struct blk_mq_hw_ctx *hctx,
 	return false;
 }
 
-static int mtip_queue_rq(struct blk_mq_hw_ctx *hctx,
+static int mtip_queue_rq(struct blk_mq_llhw_ctx *llhw_ctx,
 			 const struct blk_mq_queue_data *bd)
 {
+	struct blk_mq_hw_ctx *hctx = blk_mq_to_hctx(llhw_ctx);
 	struct request *rq = bd->rq;
 	int ret;
 

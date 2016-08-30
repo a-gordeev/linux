@@ -18,6 +18,12 @@ struct blk_mq_ctxmap {
 	struct blk_align_bitmap *map;
 };
 
+struct blk_mq_llhw_ctx {
+	int			index;
+	int			queue_id;
+	void			*driver_data;
+};
+
 struct blk_mq_hw_ctx {
 	struct {
 		spinlock_t		lock;
@@ -35,8 +41,6 @@ struct blk_mq_hw_ctx {
 
 	struct request_queue	*queue;
 	struct blk_flush_queue	*fq;
-
-	void			*driver_data;
 
 	struct blk_mq_ctxmap	ctx_map;
 
@@ -62,7 +66,18 @@ struct blk_mq_hw_ctx {
 
 	unsigned long		poll_invoked;
 	unsigned long		poll_success;
+
+	unsigned int		nr_llhw_ctx;
+	struct blk_mq_llhw_ctx	llhw_ctxs[0];
 };
+
+static inline
+struct blk_mq_hw_ctx *blk_mq_to_hctx(struct blk_mq_llhw_ctx *llhw_ctx)
+{
+	struct blk_mq_llhw_ctx *llhw_ctx_0 = llhw_ctx - llhw_ctx->index;
+
+	return (void *)llhw_ctx_0 - offsetof(struct blk_mq_hw_ctx, llhw_ctxs);
+}
 
 struct blk_mq_tag_set {
 	struct blk_mq_ops	*ops;
@@ -87,11 +102,11 @@ struct blk_mq_queue_data {
 	bool last;
 };
 
-typedef int (queue_rq_fn)(struct blk_mq_hw_ctx *, const struct blk_mq_queue_data *);
+typedef int (queue_rq_fn)(struct blk_mq_llhw_ctx *, const struct blk_mq_queue_data *);
 typedef struct blk_mq_hw_ctx *(map_queue_fn)(struct request_queue *, const int);
 typedef enum blk_eh_timer_return (timeout_fn)(struct request *, bool);
-typedef int (init_hctx_fn)(struct blk_mq_hw_ctx *, void *, unsigned int);
-typedef void (exit_hctx_fn)(struct blk_mq_hw_ctx *, unsigned int);
+typedef int (init_hctx_fn)(struct blk_mq_llhw_ctx *, void *);
+typedef void (exit_hctx_fn)(struct blk_mq_llhw_ctx *);
 typedef int (init_request_fn)(void *, struct request *, unsigned int,
 		unsigned int, unsigned int);
 typedef void (exit_request_fn)(void *, struct request *, unsigned int,
@@ -101,7 +116,7 @@ typedef int (reinit_request_fn)(void *, struct request *);
 typedef void (busy_iter_fn)(struct blk_mq_hw_ctx *, struct request *, void *,
 		bool);
 typedef void (busy_tag_iter_fn)(struct request *, void *, bool);
-typedef int (poll_fn)(struct blk_mq_hw_ctx *, unsigned int);
+typedef int (poll_fn)(struct blk_mq_llhw_ctx *, unsigned int);
 
 
 struct blk_mq_ops {

@@ -201,9 +201,10 @@ static unsigned int nvme_cmd_size(struct nvme_dev *dev)
 		nvme_iod_alloc_size(dev, NVME_INT_BYTES(dev), NVME_INT_PAGES);
 }
 
-static int nvme_admin_init_hctx(struct blk_mq_hw_ctx *hctx, void *data,
-				unsigned int hctx_idx)
+static int nvme_admin_init_hctx(struct blk_mq_llhw_ctx *llhw_ctx, void *data)
 {
+	struct blk_mq_hw_ctx *hctx = blk_mq_to_hctx(llhw_ctx);
+	unsigned int hctx_idx = llhw_ctx->queue_id;
 	struct nvme_dev *dev = data;
 	struct nvme_queue *nvmeq = dev->queues[0];
 
@@ -211,14 +212,14 @@ static int nvme_admin_init_hctx(struct blk_mq_hw_ctx *hctx, void *data,
 	WARN_ON(dev->admin_tagset.tags[0] != hctx->tags);
 	WARN_ON(nvmeq->tags);
 
-	hctx->driver_data = nvmeq;
+	llhw_ctx->driver_data = nvmeq;
 	nvmeq->tags = &dev->admin_tagset.tags[0];
 	return 0;
 }
 
-static void nvme_admin_exit_hctx(struct blk_mq_hw_ctx *hctx, unsigned int hctx_idx)
+static void nvme_admin_exit_hctx(struct blk_mq_llhw_ctx *llhw_ctx)
 {
-	struct nvme_queue *nvmeq = hctx->driver_data;
+	struct nvme_queue *nvmeq = llhw_ctx->driver_data;
 
 	nvmeq->tags = NULL;
 }
@@ -236,9 +237,10 @@ static int nvme_admin_init_request(void *data, struct request *req,
 	return 0;
 }
 
-static int nvme_init_hctx(struct blk_mq_hw_ctx *hctx, void *data,
-			  unsigned int hctx_idx)
+static int nvme_init_hctx(struct blk_mq_llhw_ctx *llhw_ctx, void *data)
 {
+	struct blk_mq_hw_ctx *hctx = blk_mq_to_hctx(llhw_ctx);
+	unsigned int hctx_idx = llhw_ctx->queue_id;
 	struct nvme_dev *dev = data;
 	struct nvme_queue *nvmeq = dev->queues[hctx_idx + 1];
 
@@ -246,7 +248,7 @@ static int nvme_init_hctx(struct blk_mq_hw_ctx *hctx, void *data,
 		nvmeq->tags = &dev->tagset.tags[hctx_idx];
 
 	WARN_ON(dev->tagset.tags[hctx_idx] != hctx->tags);
-	hctx->driver_data = nvmeq;
+	llhw_ctx->driver_data = nvmeq;
 	return 0;
 }
 
@@ -558,11 +560,12 @@ static void nvme_unmap_data(struct nvme_dev *dev, struct request *req)
 /*
  * NOTE: ns is NULL when called on the admin queue.
  */
-static int nvme_queue_rq(struct blk_mq_hw_ctx *hctx,
+static int nvme_queue_rq(struct blk_mq_llhw_ctx *llhw_ctx,
 			 const struct blk_mq_queue_data *bd)
 {
+	struct blk_mq_hw_ctx *hctx = blk_mq_to_hctx(llhw_ctx);
 	struct nvme_ns *ns = hctx->queue->queuedata;
-	struct nvme_queue *nvmeq = hctx->driver_data;
+	struct nvme_queue *nvmeq = llhw_ctx->driver_data;
 	struct nvme_dev *dev = nvmeq->dev;
 	struct request *req = bd->rq;
 	struct nvme_command cmnd;
@@ -742,9 +745,9 @@ static irqreturn_t nvme_irq_check(int irq, void *data)
 	return IRQ_NONE;
 }
 
-static int nvme_poll(struct blk_mq_hw_ctx *hctx, unsigned int tag)
+static int nvme_poll(struct blk_mq_llhw_ctx *llhw_ctx, unsigned int tag)
 {
-	struct nvme_queue *nvmeq = hctx->driver_data;
+	struct nvme_queue *nvmeq = llhw_ctx->driver_data;
 
 	if (nvme_cqe_valid(nvmeq, nvmeq->cq_head, nvmeq->cq_phase)) {
 		spin_lock_irq(&nvmeq->q_lock);

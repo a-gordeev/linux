@@ -855,9 +855,10 @@ static int dm_mq_init_request(void *data, struct request *rq,
 	return 0;
 }
 
-static int dm_mq_queue_rq(struct blk_mq_hw_ctx *hctx,
+static int dm_mq_queue_rq(struct blk_mq_llhw_ctx *llhw_ctx,
 			  const struct blk_mq_queue_data *bd)
 {
+	struct blk_mq_hw_ctx *hctx = blk_mq_to_hctx(llhw_ctx);
 	struct request *rq = bd->rq;
 	struct dm_rq_target_io *tio = blk_mq_rq_to_pdu(rq);
 	struct mapped_device *md = tio->md;

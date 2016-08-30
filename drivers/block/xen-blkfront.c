@@ -872,11 +872,12 @@ static inline bool blkif_request_flush_invalid(struct request *req,
 		 !info->feature_fua));
 }
 
-static int blkif_queue_rq(struct blk_mq_hw_ctx *hctx,
+static int blkif_queue_rq(struct blk_mq_llhw_ctx *llhw_ctx,
 			  const struct blk_mq_queue_data *qd)
 {
 	unsigned long flags;
-	int qid = hctx->queue_num;
+	int qid = llhw_ctx->queue_id;
+	struct blk_mq_hw_ctx *hctx = blk_mq_to_hctx(llhw_ctx);
 	struct blkfront_info *info = hctx->queue->queuedata;
 	struct blkfront_ring_info *rinfo = NULL;
 

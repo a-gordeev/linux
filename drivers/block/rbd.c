@@ -3383,7 +3383,7 @@ err:
 	blk_mq_end_request(rq, result);
 }
 
-static int rbd_queue_rq(struct blk_mq_hw_ctx *hctx,
+static int rbd_queue_rq(struct blk_mq_llhw_ctx *llhw_ctx,
 		const struct blk_mq_queue_data *bd)
 {
 	struct request *rq = bd->rq;
