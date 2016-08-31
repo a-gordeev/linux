@@ -2069,13 +2069,18 @@ struct request_queue *blk_mq_init_allocated_queue(struct blk_mq_tag_set *set,
 	if (!q->queue_hw_ctx)
 		goto err_percpu;
 
-	q->mq_map = blk_mq_make_queue_map(set);
+	/* If cpus are offline, map them to first hctx */
+	q->mq_map = kzalloc_node(sizeof(*q->mq_map) * nr_cpu_ids, GFP_KERNEL,
+					set->numa_node);
 	if (!q->mq_map)
 		goto err_map;
 
 	blk_mq_realloc_hw_ctxs(set, q);
 	if (!q->nr_hw_queues)
 		goto err_hctxs;
+
+	if (blk_mq_update_queue_map(q->mq_map, q->nr_hw_queues, cpu_online_mask))
+		goto err_update;
 
 	INIT_WORK(&q->timeout_work, blk_mq_timeout_work);
 	blk_queue_rq_timeout(q, set->timeout ? set->timeout : 30 * HZ);
@@ -2119,6 +2124,7 @@ struct request_queue *blk_mq_init_allocated_queue(struct blk_mq_tag_set *set,
 	return q;
 
 err_hctxs:
+err_update:
 	kfree(q->mq_map);
 err_map:
 	kfree(q->queue_hw_ctx);
