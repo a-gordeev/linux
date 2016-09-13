@@ -49,6 +49,8 @@ void blk_mq_disable_hotplug(void);
  */
 extern int blk_mq_update_queue_map(unsigned int *map, unsigned int nr_queues,
 				   const struct cpumask *online_mask);
+extern void blk_mq_adjust_tag_set(struct blk_mq_tag_set *set,
+				  const struct cpumask *online_mask);
 extern int blk_mq_hw_queue_to_node(unsigned int *map, unsigned int);
 
 /*

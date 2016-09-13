@@ -21,7 +21,6 @@
 #include <linux/cache.h>
 #include <linux/sched/sysctl.h>
 #include <linux/delay.h>
-#include <linux/crash_dump.h>
 
 #include <trace/events/block.h>
 
@@ -2286,23 +2285,12 @@ int blk_mq_alloc_tag_set(struct blk_mq_tag_set *set)
 	 * TODO	Restore original queue depth and count limits
 	 */
 
-	/*
-	 * If a crashdump is active, then we are potentially in a very
-	 * memory constrained environment. Limit us to 1 queue.
-	 */
-	set->nr_co_queues = is_kdump_kernel() ? 1 : set->nr_hw_queues;
-	set->co_queue_size = 1;
+	blk_mq_adjust_tag_set(set, cpu_online_mask);
 
 	if (queue_depth(set) < set->reserved_tags + BLK_MQ_TAG_MIN)
 		return -EINVAL;
 	if (queue_depth(set) > BLK_MQ_MAX_DEPTH)
 		return -EINVAL;
-
-	/*
-	 * There is no use for more h/w queues than cpus.
-	 */
-	if (set->nr_co_queues > nr_cpu_ids)
-		set->nr_co_queues = nr_cpu_ids;
 
 	set->tags = kzalloc_node(set->nr_co_queues * sizeof(*set->tags),
 				 GFP_KERNEL, set->numa_node);

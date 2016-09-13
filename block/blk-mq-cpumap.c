@@ -9,6 +9,7 @@
 #include <linux/mm.h>
 #include <linux/smp.h>
 #include <linux/cpu.h>
+#include <linux/crash_dump.h>
 
 #include <linux/blk-mq.h>
 #include "blk.h"
@@ -84,6 +85,49 @@ int blk_mq_update_queue_map(unsigned int *map, unsigned int nr_queues,
 
 	free_cpumask_var(cpus);
 	return 0;
+}
+
+void blk_mq_adjust_tag_set(struct blk_mq_tag_set *set,
+			   const struct cpumask *online_mask)
+{
+	unsigned int nr_cpus, nr_uniq_cpus, first_sibling;
+	cpumask_var_t cpus;
+	int i;
+
+	/*
+	 * If a crashdump is active, then we are potentially in a very
+	 * memory constrained environment. Limit us to 1 queue.
+	 */
+	if (is_kdump_kernel())
+		goto default_map;
+
+	if (!alloc_cpumask_var(&cpus, GFP_ATOMIC))
+		goto default_map;
+
+	cpumask_clear(cpus);
+	nr_cpus = nr_uniq_cpus = 0;
+
+	for_each_cpu(i, online_mask) {
+		nr_cpus++;
+		first_sibling = get_first_sibling(i);
+		if (!cpumask_test_cpu(first_sibling, cpus))
+			nr_uniq_cpus++;
+		cpumask_set_cpu(i, cpus);
+	}
+
+	free_cpumask_var(cpus);
+
+	if (set->nr_hw_queues < nr_uniq_cpus) {
+default_map:
+		set->nr_co_queues = set->nr_hw_queues;
+		set->co_queue_size = 1;
+	} else if (set->nr_hw_queues < nr_cpus) {
+		set->nr_co_queues = nr_uniq_cpus;
+		set->co_queue_size = set->nr_hw_queues / nr_uniq_cpus;
+	} else {
+		set->nr_co_queues = nr_cpus;
+		set->co_queue_size = set->nr_hw_queues / nr_cpus;
+	}
 }
 
 /*
