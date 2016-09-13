@@ -1684,17 +1684,8 @@ static void blk_mq_exit_hw_queues(struct request_queue *q,
 	struct blk_mq_hw_ctx *hctx;
 	unsigned int i;
 
-	queue_for_each_hw_ctx(q, hctx, i)
-		blk_mq_exit_hctx(q, set, hctx, i);
-}
-
-static void blk_mq_free_hw_queues(struct request_queue *q,
-		struct blk_mq_tag_set *set)
-{
-	struct blk_mq_hw_ctx *hctx;
-	unsigned int i;
-
 	queue_for_each_hw_ctx(q, hctx, i) {
+		blk_mq_exit_hctx(q, set, hctx, i);
 		free_cpumask_var(hctx->cpumask);
 		kfree(hctx->ctxs);
 		kfree(hctx);
@@ -2130,9 +2121,7 @@ void blk_mq_free_queue(struct request_queue *q)
 	mutex_unlock(&all_q_mutex);
 
 	blk_mq_del_queue_tag_set(q);
-
 	blk_mq_exit_hw_queues(q, set);
-	blk_mq_free_hw_queues(q, set);
 }
 
 /* Basically redo blk_mq_init_queue with queue frozen */
