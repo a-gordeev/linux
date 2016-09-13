@@ -88,8 +88,13 @@ int blk_mq_tag_to_llhw_ctx_idx(struct blk_mq_hw_ctx *hctx, unsigned int tag)
 
 struct blk_mq_tag_set {
 	struct blk_mq_ops	*ops;
+
 	unsigned int		nr_hw_queues;
 	unsigned int		queue_depth;	/* max hw supported */
+
+	unsigned int		nr_co_queues;	/* number of combined queues */
+	unsigned int		co_queue_size;	/* hw queues in one combined */
+
 	unsigned int		reserved_tags;
 	unsigned int		cmd_size;	/* per-request extra data */
 	int			numa_node;

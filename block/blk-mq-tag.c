@@ -477,7 +477,7 @@ void blk_mq_tagset_busy_iter(struct blk_mq_tag_set *tagset,
 {
 	int i;
 
-	for (i = 0; i < tagset->nr_hw_queues; i++) {
+	for (i = 0; i < tagset->nr_co_queues; i++) {
 		if (tagset->tags && tagset->tags[i])
 			blk_mq_all_tag_busy_iter(tagset->tags[i], fn, priv);
 	}
@@ -491,7 +491,7 @@ int blk_mq_reinit_tagset(struct blk_mq_tag_set *set)
 	if (!set->ops->reinit_request)
 		goto out;
 
-	for (i = 0; i < set->nr_hw_queues; i++) {
+	for (i = 0; i < set->nr_co_queues; i++) {
 		struct blk_mq_tags *tags = set->tags[i];
 
 		for (j = 0; j < tags->nr_tags; j++) {
