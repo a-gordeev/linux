@@ -829,6 +829,7 @@ static void __blk_mq_run_hw_queue(struct blk_mq_hw_ctx *hctx)
 	queued = 0;
 	while (!list_empty(&rq_list)) {
 		struct blk_mq_queue_data bd;
+		int llhw_ctx_idx;
 		int ret;
 
 		rq = list_first_entry(&rq_list, struct request, queuelist);
@@ -838,7 +839,9 @@ static void __blk_mq_run_hw_queue(struct blk_mq_hw_ctx *hctx)
 		bd.list = dptr;
 		bd.last = list_empty(&rq_list);
 
-		ret = q->mq_ops->queue_rq(&hctx->llhw_ctxs[0], &bd);
+		llhw_ctx_idx = blk_mq_tag_to_llhw_ctx_idx(hctx, rq->tag);
+
+		ret = q->mq_ops->queue_rq(&hctx->llhw_ctxs[llhw_ctx_idx], &bd);
 		switch (ret) {
 		case BLK_MQ_RQ_QUEUE_OK:
 			queued++;
@@ -1260,13 +1263,14 @@ static int blk_mq_direct_issue_request(struct request *rq, blk_qc_t *cookie)
 		.last = 1
 	};
 	blk_qc_t new_cookie = blk_tag_to_qc_t(rq->tag, hctx->queue_num);
+	int llhw_ctx_idx = blk_mq_tag_to_llhw_ctx_idx(hctx, rq->tag);
 
 	/*
 	 * For OK queue, we are done. For error, kill it. Any other
 	 * error (busy), just add it to our list as we previously
 	 * would have done
 	 */
-	ret = q->mq_ops->queue_rq(&hctx->llhw_ctxs[0], &bd);
+	ret = q->mq_ops->queue_rq(&hctx->llhw_ctxs[llhw_ctx_idx], &bd);
 	if (ret == BLK_MQ_RQ_QUEUE_OK) {
 		*cookie = new_cookie;
 		return 0;
@@ -1741,6 +1745,7 @@ static struct blk_mq_hw_ctx *blk_mq_init_hctx(struct request_queue *q,
 	hctx->queue_num = hctx_idx;
 	hctx->nr_ctx = 0;
 	hctx->nr_llhw_ctx = nr_llhw_ctx;
+	hctx->llhw_queue_depth = set->queue_depth;
 	hctx->flags = set->flags & ~BLK_MQ_F_TAG_SHARED;
 	hctx->tags = set->tags[hctx_idx];
 

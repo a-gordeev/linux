@@ -3312,9 +3312,11 @@ bool blk_poll(struct request_queue *q, blk_qc_t cookie)
 
 	state = current->state;
 	while (!need_resched()) {
+		unsigned int tag = blk_qc_t_to_tag(cookie);
 		unsigned int queue_num = blk_qc_t_to_queue_num(cookie);
 		struct blk_mq_hw_ctx *hctx = q->queue_hw_ctx[queue_num];
-		struct blk_mq_llhw_ctx *llhw_ctx = &hctx->llhw_ctxs[0];
+		int idx = blk_mq_tag_to_llhw_ctx_idx(hctx, tag);
+		struct blk_mq_llhw_ctx *llhw_ctx = &hctx->llhw_ctxs[idx];
 		int ret;
 
 		hctx->poll_invoked++;

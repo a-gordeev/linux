@@ -67,6 +67,7 @@ struct blk_mq_hw_ctx {
 	unsigned long		poll_invoked;
 	unsigned long		poll_success;
 
+	unsigned int		llhw_queue_depth;
 	unsigned int		nr_llhw_ctx;
 	struct blk_mq_llhw_ctx	llhw_ctxs[0];
 };
@@ -77,6 +78,12 @@ struct blk_mq_hw_ctx *blk_mq_to_hctx(struct blk_mq_llhw_ctx *llhw_ctx)
 	struct blk_mq_llhw_ctx *llhw_ctx_0 = llhw_ctx - llhw_ctx->index;
 
 	return (void *)llhw_ctx_0 - offsetof(struct blk_mq_hw_ctx, llhw_ctxs);
+}
+
+static inline
+int blk_mq_tag_to_llhw_ctx_idx(struct blk_mq_hw_ctx *hctx, unsigned int tag)
+{
+	return tag / hctx->llhw_queue_depth;
 }
 
 struct blk_mq_tag_set {
