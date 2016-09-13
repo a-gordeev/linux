@@ -1676,6 +1676,10 @@ static void blk_mq_exit_hctx(struct request_queue *q,
 	blk_mq_unregister_cpu_notifier(&hctx->cpu_notifier);
 	blk_free_flush_queue(hctx->fq);
 	blk_mq_free_bitmap(&hctx->ctx_map);
+
+	free_cpumask_var(hctx->cpumask);
+	kfree(hctx->ctxs);
+	kfree(hctx);
 }
 
 static void blk_mq_exit_hw_queues(struct request_queue *q,
@@ -1684,12 +1688,8 @@ static void blk_mq_exit_hw_queues(struct request_queue *q,
 	struct blk_mq_hw_ctx *hctx;
 	unsigned int i;
 
-	queue_for_each_hw_ctx(q, hctx, i) {
+	queue_for_each_hw_ctx(q, hctx, i)
 		blk_mq_exit_hctx(q, set, hctx, i);
-		free_cpumask_var(hctx->cpumask);
-		kfree(hctx->ctxs);
-		kfree(hctx);
-	}
 
 	q->nr_hw_queues = 0;
 }
@@ -2018,12 +2018,8 @@ static void blk_mq_realloc_hw_ctxs(struct blk_mq_tag_set *set,
 				set->tags[j] = NULL;
 			}
 			blk_mq_exit_hctx(q, set, hctx, j);
-			free_cpumask_var(hctx->cpumask);
 			kobject_put(&hctx->kobj);
-			kfree(hctx->ctxs);
-			kfree(hctx);
 			hctxs[j] = NULL;
-
 		}
 	}
 	q->nr_hw_queues = i;
