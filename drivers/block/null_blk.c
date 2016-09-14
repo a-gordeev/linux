@@ -793,9 +793,7 @@ static int __init null_init(void)
 							nr_online_nodes);
 			submit_queues = nr_online_nodes;
 		}
-	} else if (submit_queues > nr_cpu_ids)
-		submit_queues = nr_cpu_ids;
-	else if (!submit_queues)
+	} else if (!submit_queues)
 		submit_queues = 1;
 
 	mutex_init(&lock);
