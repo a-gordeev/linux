@@ -2005,6 +2005,8 @@ static void blk_mq_realloc_hw_ctxs(struct blk_mq_tag_set *set,
 
 		if (hctxs[i])
 			continue;
+		if (!set->tags[i])
+			break;
 
 		node = blk_mq_hw_queue_to_node(q->mq_map, i);
 		hctxs[i] = kzalloc_node(sizeof(struct blk_mq_hw_ctx),
