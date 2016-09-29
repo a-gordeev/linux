@@ -1895,6 +1895,7 @@ static void blk_mq_realloc_hw_ctxs(struct blk_mq_tag_set *set,
 						struct request_queue *q)
 {
 	int i, j;
+	struct blk_mq_hw_ctx *hctx;
 	struct blk_mq_hw_ctx **hctxs = q->queue_hw_ctx;
 
 	blk_mq_sysfs_unregister(q);
@@ -1908,33 +1909,36 @@ static void blk_mq_realloc_hw_ctxs(struct blk_mq_tag_set *set,
 		if (node == NUMA_NO_NODE)
 			node = set->numa_node;
 
-		hctxs[i] = kzalloc_node(sizeof(struct blk_mq_hw_ctx),
-					GFP_KERNEL, node);
-		if (!hctxs[i])
+		hctx = kzalloc_node(sizeof(*hctx), GFP_KERNEL, node);
+		if (!hctx)
 			break;
 
-		if (blk_mq_init_hctx(q, set, hctxs[i], i, node)) {
-			kfree(hctxs[i]);
-			hctxs[i] = NULL;
+		if (blk_mq_init_hctx(q, set, hctx, i, node)) {
+			kfree(hctx);
 			break;
 		}
-		blk_mq_hctx_kobj_init(hctxs[i]);
+
+		blk_mq_hctx_kobj_init(hctx);
+		hctxs[i] = hctx;
 	}
 	for (j = i; j < q->nr_hw_queues; j++) {
-		struct blk_mq_hw_ctx *hctx = hctxs[j];
+		hctx = hctxs[i];
 
-		if (hctx) {
-			if (hctx->tags) {
-				blk_mq_free_rq_map(set, hctx->tags, j);
-				set->tags[j] = NULL;
-			}
-			blk_mq_exit_hctx(q, set, hctx, j);
-			kobject_put(&hctx->kobj);
-			kfree(hctx->ctxs);
-			kfree(hctx);
-			hctxs[j] = NULL;
+		if (!hctx)
+			continue;
 
+		hctxs[i] = NULL;
+		kobject_put(&hctx->kobj);
+
+		if (hctx->tags) {
+			blk_mq_free_rq_map(set, hctx->tags, j);
+			set->tags[j] = NULL;
 		}
+
+		blk_mq_exit_hctx(q, set, hctx, j);
+
+		kfree(hctx->ctxs);
+		kfree(hctx);
 	}
 	q->nr_hw_queues = i;
 	blk_mq_sysfs_register(q);
