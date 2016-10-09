@@ -429,6 +429,11 @@ void blk_mq_hctx_kobj_init(struct blk_mq_hw_ctx *hctx)
 	kobject_init(&hctx->kobj, &blk_mq_hw_ktype);
 }
 
+void blk_mq_hctx_kobj_put(struct blk_mq_hw_ctx *hctx)
+{
+	kobject_put(&hctx->kobj);
+}
+
 static void blk_mq_sysfs_init(struct request_queue *q)
 {
 	struct blk_mq_ctx *ctx;
