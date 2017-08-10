@@ -1,0 +1,7 @@
+#
+# CPU caches performance measure driver
+#
+
+config CPU_CACHE_PERF
+	tristate "CPU Cache Performance"
+
