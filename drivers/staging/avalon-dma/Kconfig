@@ -1,0 +1,11 @@
+config AVALON_DMA_ENG
+	tristate "Avalon DMA engine"
+	help
+	  This selects a driver for Avalon DMA engine IP block
+
+config AVALON_DMA_DRV
+	depends on AVALON_DMA_ENG
+	tristate "Avalon DMA driver"
+	help
+	  This selects a driver for Avalon DMA
+
