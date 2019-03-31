@@ -89,6 +89,9 @@ int avalon_dma_submit_xfer_sg(struct avalon_dma *avalon_dma,
 int avalon_dma_issue_pending(struct avalon_dma *avalon_dma);
 
 irqreturn_t avalon_dma_interrupt(struct avalon_dma *avalon_dma);
+int avalon_dma_start_xfer(struct avalon_dma *avalon_dma,
+			  struct avalon_dma_tx_descriptor *desc);
+void avalon_dma_tasklet(unsigned long);
 
 #endif
 

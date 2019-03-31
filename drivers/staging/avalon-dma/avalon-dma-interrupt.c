@@ -4,7 +4,6 @@
 #include "avalon-dma-hw.h"
 #include "avalon-dma.h"
 #include "avalon-dma-stats.h"
-#include "avalon-dma-internal.h"
 
 static bool dma_desc_done(struct avalon_dma_tx_descriptor *desc)
 {

@@ -4,7 +4,6 @@
 
 #include "avalon-dma.h"
 #include "avalon-dma-util.h"
-#include "avalon-dma-internal.h"
 
 #define BAR_AV_MM_DMA		0
 
