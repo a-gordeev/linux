@@ -1,8 +1,6 @@
-#ifndef __NERDIC_DRV_FOPS_H__
-#define __NERDIC_DRV_FOPS_H__
+#ifndef __AVALON_DRV_FOPS_H__
+#define __AVALON_DRV_FOPS_H__
 
-#include "avalon-drv.h"
-
-extern const struct file_operations nddc_pci_channel_fops;
+extern const struct file_operations avalon_dev_fops;
 
 #endif

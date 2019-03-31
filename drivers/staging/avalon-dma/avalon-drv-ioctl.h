@@ -1,7 +1,6 @@
-#ifndef __NERDIC_DRV_IOCTL_H__
-#define __NERDIC_DRV_IOCTL_H__
+#ifndef __AVALON_DRV_IOCTL_H__
+#define __AVALON_DRV_IOCTL_H__
 
-#define IOCTL_NERDIC_SUBMIT_BUFFER	_IOW(0xB5, 0, int[3])
 #define IOCTL_ALARIC_DMA_READ		_IOR(0xC5, 0, struct iovec)
 #define IOCTL_ALARIC_DMA_WRITE		_IOW(0xC6, 0, struct iovec)
 #define IOCTL_ALARIC_DMA_SIMULTANEOUS	_IOWR(0xC7, 0, struct iovec[2])

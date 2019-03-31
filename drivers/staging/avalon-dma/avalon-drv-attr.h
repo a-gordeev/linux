@@ -1,4 +1,4 @@
-#ifndef __NERDIC_DRV_ATTRS_H__
+#ifndef __AVALON_DRV_ATTRS_H__
 
 #include <linux/device.h>
 

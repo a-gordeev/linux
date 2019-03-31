@@ -1,18 +1,18 @@
-#ifndef __NERDIC_DRV_H__
-#define __NERDIC_DRV_H__
+#ifndef __AVALON_DRV_H__
+#define __AVALON_DRV_H__
 
 #include <linux/miscdevice.h>
 
 #include "avalon-dma.h"
 
-#define DRIVER_VERSION "0.0.2"
+#define DRIVER_VERSION "0.0.0"
 
-#define NERDIC_DMA_DRIVER_NAME "nddc"
+#define DRIVER_NAME "avalon-drv"
 
-struct nerdic_device {
+struct avalon_dev {
 	struct pci_dev *pci_dev;
 	struct avalon_dma avalon_dma;
-	struct miscdevice nddc_pci_misc;
+	struct miscdevice misc_dev;
 };
 
 #endif

@@ -6,6 +6,7 @@
 #include <linux/kthread.h>
 #include <linux/sched/signal.h>
 
+#include "avalon-drv.h"
 #include "avalon-drv-fops.h"
 #include "avalon-drv-ioctl.h"
 #include "avalon-drv-util.h"
@@ -39,12 +40,12 @@ static void init_callback_info(struct xfer_callback_info *info,
 	info->kt_start = ktime_get();
 }
 
-static int nddc_open(struct inode *inode, struct file *file)
+static int avalon_dev_open(struct inode *inode, struct file *file)
 {
 	return 0;
 }
 
-static int nddc_release(struct inode *inode, struct file *file)
+static int avalon_dev_release(struct inode *inode, struct file *file)
 {
 	return 0;
 }
@@ -81,11 +82,11 @@ static void wr_xfer_callback(void *dma_async_param)
 	xfer_callback(info, "wr");
 }
 
-static int ioctl_xfer_rw(struct nerdic_device *nddc,
+static int ioctl_xfer_rw(struct avalon_dev *avalon_dev,
 			 enum dma_data_direction direction,
 			 void __user *user_buf, size_t user_len)
 {
-	struct device *dev = &nddc->pci_dev->dev;
+	struct device *dev = &avalon_dev->pci_dev->dev;
 	dma_addr_t dma_addr;
 	void *buf;
 	struct xfer_callback_info info;
@@ -145,7 +146,7 @@ static int ioctl_xfer_rw(struct nerdic_device *nddc,
 		 __FUNCTION__, __LINE__, dma_addr, size, direction, nr_reps);
 
 	for (i = 0; i < nr_reps; i++) {
-		ret = avalon_dma_submit_xfer(&nddc->avalon_dma,
+		ret = avalon_dma_submit_xfer(&avalon_dev->avalon_dma,
 					     direction,
 					     TARGET_MEM_BASE, dma_addr, size,
 					     xfer_callback, &info);
@@ -153,7 +154,7 @@ static int ioctl_xfer_rw(struct nerdic_device *nddc,
 			goto dma_submit_err;
 	}
 
-	ret = avalon_dma_issue_pending(&nddc->avalon_dma);
+	ret = avalon_dma_issue_pending(&avalon_dev->avalon_dma);
 	if (ret)
 		goto issue_pending_err;
 
@@ -183,11 +184,11 @@ mem_len_err:
 	return ret;
 }
 
-static int ioctl_xfer_simultaneous(struct nerdic_device *nddc,
+static int ioctl_xfer_simultaneous(struct avalon_dev *avalon_dev,
 				   void __user *user_buf_rd, size_t user_len_rd,
 				   void __user *user_buf_wr, size_t user_len_wr)
 {
-	struct device *dev = &nddc->pci_dev->dev;
+	struct device *dev = &avalon_dev->pci_dev->dev;
 	dma_addr_t dma_addr_rd, dma_addr_wr;
 	void *buf_rd, *buf_wr;
 	struct xfer_callback_info info;
@@ -250,14 +251,14 @@ static int ioctl_xfer_simultaneous(struct nerdic_device *nddc,
 	init_callback_info(&info, dev, 2 * nr_reps);
 
 	for (i = 0; i < nr_reps; i++) {
-		ret = avalon_dma_submit_xfer(&nddc->avalon_dma,
+		ret = avalon_dma_submit_xfer(&avalon_dev->avalon_dma,
 					     DMA_TO_DEVICE,
 					     target_wr, dma_addr_wr, size,
 					     wr_xfer_callback, &info);
 		if (ret)
 			goto rd_dma_submit_err;
 		
-		ret = avalon_dma_submit_xfer(&nddc->avalon_dma,
+		ret = avalon_dma_submit_xfer(&avalon_dev->avalon_dma,
 					     DMA_FROM_DEVICE,
 					     target_rd, dma_addr_rd, size,
 					     rd_xfer_callback, &info);
@@ -266,7 +267,7 @@ static int ioctl_xfer_simultaneous(struct nerdic_device *nddc,
 			goto wr_dma_submit_err;
 	}
 
-	ret = avalon_dma_issue_pending(&nddc->avalon_dma);
+	ret = avalon_dma_issue_pending(&avalon_dev->avalon_dma);
 	BUG_ON(ret);
 	if (ret)
 		goto issue_pending_err;
@@ -481,12 +482,12 @@ static int xfer_rw_sg(struct avalon_dma *avalon_dma,
 	return 0;
 }
 
-static int ioctl_xfer_rw_sg(struct nerdic_device *nddc,
+static int ioctl_xfer_rw_sg(struct avalon_dev *avalon_dev,
 			    enum dma_data_direction direction,
 			    void __user *user_buf, size_t user_len,
 			    bool is_smp)
 {
-	struct device *dev = &nddc->pci_dev->dev;
+	struct device *dev = &avalon_dev->pci_dev->dev;
 	void (*xfer_callback)(void *dma_async_param);
 	struct dma_sg_buf *sg_buf;
 	int ret;
@@ -534,12 +535,12 @@ static int ioctl_xfer_rw_sg(struct nerdic_device *nddc,
 			       sg_buf->dma_dir);
 
 	if (is_smp) {
-		ret = xfer_rw_sg_smp(&nddc->avalon_dma,
+		ret = xfer_rw_sg_smp(&avalon_dev->avalon_dma,
 				     direction,
 				     TARGET_MEM_BASE, sg_buf->dma_sgt,
 				     xfer_callback);
 	} else {
-		ret = xfer_rw_sg(&nddc->avalon_dma,
+		ret = xfer_rw_sg(&avalon_dev->avalon_dma,
 				 direction,
 				 TARGET_MEM_BASE, sg_buf->dma_sgt,
 				 xfer_callback);
@@ -569,11 +570,11 @@ mem_len_err:
 }
 
 static int
-ioctl_xfer_simultaneous_sg(struct nerdic_device *nddc,
+ioctl_xfer_simultaneous_sg(struct avalon_dev *avalon_dev,
 			   void __user *user_buf_rd, size_t user_len_rd,
 			   void __user *user_buf_wr, size_t user_len_wr)
 {
-	struct device *dev = &nddc->pci_dev->dev;
+	struct device *dev = &avalon_dev->pci_dev->dev;
 	struct xfer_callback_info info;
 	struct dma_sg_buf *sg_buf_rd, *sg_buf_wr;
 	int ret;
@@ -633,14 +634,14 @@ ioctl_xfer_simultaneous_sg(struct nerdic_device *nddc,
 	dev_info(dev, "%s(%d) reps = %d", __FUNCTION__, __LINE__, nr_reps);
 
 	for (i = 0; i < nr_reps; i++) {
-		ret = avalon_dma_submit_xfer_sg(&nddc->avalon_dma,
+		ret = avalon_dma_submit_xfer_sg(&avalon_dev->avalon_dma,
 						DMA_TO_DEVICE,
 						dma_addr_wr, sg_buf_wr->dma_sgt,
 						wr_xfer_callback, &info);
 		if (ret)
 			goto dma_submit_rd_err;
 		
-		ret = avalon_dma_submit_xfer_sg(&nddc->avalon_dma,
+		ret = avalon_dma_submit_xfer_sg(&avalon_dev->avalon_dma,
 						DMA_FROM_DEVICE,
 						dma_addr_rd, sg_buf_rd->dma_sgt,
 						rd_xfer_callback, &info);
@@ -649,7 +650,7 @@ ioctl_xfer_simultaneous_sg(struct nerdic_device *nddc,
 			goto dma_submit_wr_err;
 	}
 
-	ret = avalon_dma_issue_pending(&nddc->avalon_dma);
+	ret = avalon_dma_issue_pending(&avalon_dev->avalon_dma);
 	BUG_ON(ret);
 	if (ret)
 		goto issue_pending_err;
@@ -685,11 +686,11 @@ mem_len_err:
 	return ret;
 }
 
-static long nddc_pci_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+static long avalon_dev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
-	struct nerdic_device *nddc = container_of(file->private_data,
-		struct nerdic_device, nddc_pci_misc);
-	struct device *dev = &nddc->pci_dev->dev;
+	struct avalon_dev *avalon_dev = container_of(file->private_data,
+		struct avalon_dev, misc_dev);
+	struct device *dev = &avalon_dev->pci_dev->dev;
 	struct iovec iovec[2];
 	void __user *buf = NULL, __user *buf_rd = NULL, __user *buf_wr = NULL;
 	size_t len = 0, len_rd = 0, len_wr = 0;
@@ -743,30 +744,30 @@ static long nddc_pci_ioctl(struct file *file, unsigned int cmd, unsigned long ar
 
 	switch (cmd) {
 	case IOCTL_ALARIC_DMA_READ:
-		ret = ioctl_xfer_rw(nddc, DMA_FROM_DEVICE, buf, len);
+		ret = ioctl_xfer_rw(avalon_dev, DMA_FROM_DEVICE, buf, len);
 		break;
 	case IOCTL_ALARIC_DMA_WRITE:
-		ret = ioctl_xfer_rw(nddc, DMA_TO_DEVICE, buf, len);
+		ret = ioctl_xfer_rw(avalon_dev, DMA_TO_DEVICE, buf, len);
 		break;
 	case IOCTL_ALARIC_DMA_SIMULTANEOUS:
-		ret = ioctl_xfer_simultaneous(nddc,
+		ret = ioctl_xfer_simultaneous(avalon_dev,
 					      buf_rd, len_rd,
 					      buf_wr, len_wr);
 		break;
 	case IOCTL_ALARIC_DMA_READ_SG:
-		ret = ioctl_xfer_rw_sg(nddc, DMA_FROM_DEVICE, buf, len, false);
+		ret = ioctl_xfer_rw_sg(avalon_dev, DMA_FROM_DEVICE, buf, len, false);
 		break;
 	case IOCTL_ALARIC_DMA_WRITE_SG:
-		ret = ioctl_xfer_rw_sg(nddc, DMA_TO_DEVICE, buf, len, false);
+		ret = ioctl_xfer_rw_sg(avalon_dev, DMA_TO_DEVICE, buf, len, false);
 		break;
 	case IOCTL_ALARIC_DMA_READ_SG_SMP:
-		ret = ioctl_xfer_rw_sg(nddc, DMA_FROM_DEVICE, buf, len, true);
+		ret = ioctl_xfer_rw_sg(avalon_dev, DMA_FROM_DEVICE, buf, len, true);
 		break;
 	case IOCTL_ALARIC_DMA_WRITE_SG_SMP:
-		ret = ioctl_xfer_rw_sg(nddc, DMA_TO_DEVICE, buf, len, true);
+		ret = ioctl_xfer_rw_sg(avalon_dev, DMA_TO_DEVICE, buf, len, true);
 		break;
 	case IOCTL_ALARIC_DMA_SIMULTANEOUS_SG:
-		ret = ioctl_xfer_simultaneous_sg(nddc,
+		ret = ioctl_xfer_simultaneous_sg(avalon_dev,
 						 buf_rd, len_rd,
 						 buf_wr, len_wr);
 		break;
@@ -781,9 +782,9 @@ done:
 	return ret;
 }
 
-const struct file_operations nddc_pci_channel_fops = {
-	.open = nddc_open,
-	.release = nddc_release,
-	.llseek = generic_file_llseek,
-	.unlocked_ioctl = nddc_pci_ioctl,
+const struct file_operations avalon_dev_fops = {
+	.open		= avalon_dev_open,
+	.release	= avalon_dev_release,
+	.llseek		= generic_file_llseek,
+	.unlocked_ioctl	= avalon_dev_ioctl,
 };

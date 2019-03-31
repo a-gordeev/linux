@@ -15,7 +15,7 @@
 
 static irqreturn_t dma_interrupt(int irq, void *dev_id)
 {
-	struct nerdic_device *nddc = (struct nerdic_device *) dev_id;
+	struct avalon_dev *nddc = (struct avalon_dev *) dev_id;
 
 	return avalon_dma_interrupt(&nddc->avalon_dma);
 }
@@ -27,7 +27,7 @@ static irqreturn_t vio_interrupt(int irq, void *dev_id)
 
 static irqreturn_t vsync_interrupt(int irq, void *dev_id)
 {
-	struct nerdic_device *nddc = (struct nerdic_device *) dev_id;
+	struct avalon_dev *nddc = (struct avalon_dev *) dev_id;
 	struct device *dev = &nddc->pci_dev->dev;
 
 		static ktime_t kt_prev;
@@ -62,7 +62,7 @@ static irqreturn_t ardc_interrupt(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
-int init_interrupts(struct nerdic_device *nddc)
+int init_interrupts(struct avalon_dev *nddc)
 {
 	struct pci_dev *dev = nddc->pci_dev;
 	int rc;
@@ -78,16 +78,16 @@ int init_interrupts(struct nerdic_device *nddc)
 
  			switch (i) {
  			case NDDC_IRQ_DMA_STATUS:
-	 			rc = request_irq(vec, dma_interrupt, IRQF_SHARED, NERDIC_DMA_DRIVER_NAME, (void *)nddc);
+	 			rc = request_irq(vec, dma_interrupt, IRQF_SHARED, DRIVER_NAME, (void *)nddc);
  				break;
  			case NDDC_IRQ_VSYNC:
- 				rc = request_irq(vec, vsync_interrupt, IRQF_SHARED, NERDIC_DMA_DRIVER_NAME, (void *)nddc);
+ 				rc = request_irq(vec, vsync_interrupt, IRQF_SHARED, DRIVER_NAME, (void *)nddc);
  				break;
  			case NDDC_IRQ_ARDC:
- 				rc = request_irq(vec, ardc_interrupt, IRQF_SHARED, NERDIC_DMA_DRIVER_NAME, (void *)nddc);
+ 				rc = request_irq(vec, ardc_interrupt, IRQF_SHARED, DRIVER_NAME, (void *)nddc);
 	 			break;
  			case NDDC_IRQ_VIO:
- 				rc = request_irq(vec, vio_interrupt, IRQF_SHARED, NERDIC_DMA_DRIVER_NAME, (void *)nddc);
+ 				rc = request_irq(vec, vio_interrupt, IRQF_SHARED, DRIVER_NAME, (void *)nddc);
 				break;
 			default:
 				BUG();
@@ -102,7 +102,7 @@ int init_interrupts(struct nerdic_device *nddc)
 	return rc;
 }
 
-void term_interrupts(struct nerdic_device *nddc)
+void term_interrupts(struct avalon_dev *nddc)
 {
 	struct pci_dev *dev = nddc->pci_dev;
 	int i;

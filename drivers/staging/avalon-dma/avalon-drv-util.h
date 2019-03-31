@@ -1,5 +1,5 @@
-#ifndef __NERDIC_DRV_UTIL_H__
-#define __NERDIC_DRV_UTIL_H__
+#ifndef __AVALON_DRV_UTIL_H__
+#define __AVALON_DRV_UTIL_H__
 
 struct dma_sg_buf {
 	struct device			*dev;

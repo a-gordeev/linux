@@ -9,41 +9,41 @@
 
 #define PCI_VENDOR_ID_ALARIC	0x1172
 
-static int __init nddc_pci_probe(struct pci_dev *dev,
-				 const struct pci_device_id *id)
+static int __init avalon_pci_probe(struct pci_dev *dev,
+				   const struct pci_device_id *id)
 {
-	struct nerdic_device *nddc;
+	struct avalon_dev *avalon_dev;
 	int rc;
 
-	nddc = kzalloc(sizeof(struct nerdic_device), GFP_KERNEL);
-	BUG_ON(!nddc);
+	avalon_dev = kzalloc(sizeof(*avalon_dev), GFP_KERNEL);
+	BUG_ON(!avalon_dev);
 
-	nddc->pci_dev = dev;
-	pci_set_drvdata(dev, nddc);
+	avalon_dev->pci_dev = dev;
+	pci_set_drvdata(dev, avalon_dev);
 
-	nddc->nddc_pci_misc.minor = MISC_DYNAMIC_MINOR;
-	nddc->nddc_pci_misc.name = NERDIC_DMA_DRIVER_NAME;
-	nddc->nddc_pci_misc.nodename = "ddc/" NERDIC_DMA_DRIVER_NAME;
-	nddc->nddc_pci_misc.fops = &nddc_pci_channel_fops;
-	nddc->nddc_pci_misc.mode = 0666;
+	avalon_dev->misc_dev.minor = MISC_DYNAMIC_MINOR;
+	avalon_dev->misc_dev.name = DRIVER_NAME;
+	avalon_dev->misc_dev.nodename = DRIVER_NAME;
+	avalon_dev->misc_dev.fops = &avalon_dev_fops;
+	avalon_dev->misc_dev.mode = 0666;
 
-	rc = misc_register(&nddc->nddc_pci_misc);
+	rc = misc_register(&avalon_dev->misc_dev);
 	BUG_ON(rc);
 
 	rc = pci_enable_device(dev);
 	BUG_ON(rc);
 
-	rc = pci_request_regions(dev, NERDIC_DMA_DRIVER_NAME);
+	rc = pci_request_regions(dev, DRIVER_NAME);
 	BUG_ON(rc);
 
 	pci_set_master(dev);
 
 	pci_write_config_byte(dev, PCI_INTERRUPT_LINE, dev->irq);
 
-	rc = init_interrupts(nddc);
+	rc = init_interrupts(avalon_dev);
 	BUG_ON(rc);
 
-	rc = avalon_dma_init(&nddc->avalon_dma, dev);
+	rc = avalon_dma_init(&avalon_dev->avalon_dma, dev);
 	BUG_ON(rc);
 
 	rc = init_attributes(&dev->dev);
@@ -52,23 +52,23 @@ static int __init nddc_pci_probe(struct pci_dev *dev,
 	return 0;
 }
 
-static void __exit nddc_pci_remove(struct pci_dev *dev)
+static void __exit avalon_pci_remove(struct pci_dev *dev)
 {
-	struct nerdic_device *nddc = pci_get_drvdata(dev);
+	struct avalon_dev *avalon_dev = pci_get_drvdata(dev);
 
 	term_attributes(&dev->dev);
 
-	nddc = pci_get_drvdata(dev);
-	term_interrupts(nddc);
+	avalon_dev = pci_get_drvdata(dev);
+	term_interrupts(avalon_dev);
 
-	misc_deregister(&nddc->nddc_pci_misc);
+	misc_deregister(&avalon_dev->misc_dev);
 
 	pci_disable_device(dev);
 	pci_release_regions(dev);
 
-	avalon_dma_term(&nddc->avalon_dma);
+	avalon_dma_term(&avalon_dev->avalon_dma);
 
-	kfree(nddc);
+	kfree(avalon_dev);
 }
 
 static struct pci_device_id pci_ids[] = {
@@ -77,32 +77,25 @@ static struct pci_device_id pci_ids[] = {
 };
 
 static struct pci_driver dma_driver_ops = {
-	.name		= NERDIC_DMA_DRIVER_NAME,
+	.name		= DRIVER_NAME,
 	.id_table	= pci_ids,
-	.probe		= nddc_pci_probe,
-	.remove		= nddc_pci_remove,
+	.probe		= avalon_pci_probe,
+	.remove		= avalon_pci_remove,
 };
 
-static int __init nddc_drv_init(void)
+static int __init avalon_drv_init(void)
 {
-	int rc = pci_register_driver(&dma_driver_ops);
-	if (rc) {
-		printk(KERN_ERR "PCI driver registration failed\n");
-		return rc;
-	}
-
-	return 0;
+	return pci_register_driver(&dma_driver_ops);
 }
 
-static void __exit nddc_drv_exit(void)
+static void __exit avalon_drv_exit(void)
 {
 	pci_unregister_driver(&dma_driver_ops);
 }
 
-module_init(nddc_drv_init);
-module_exit(nddc_drv_exit);
+module_init(avalon_drv_init);
+module_exit(avalon_drv_exit);
 
-MODULE_INFO(credit, "Alex Feinman <alex.feinman@daqri.com>");
 MODULE_AUTHOR("Alexander Gordeev <alexander.gordeev@daqri.com>");
 MODULE_DESCRIPTION("Avalon DMA control driver");
 MODULE_VERSION(DRIVER_VERSION);

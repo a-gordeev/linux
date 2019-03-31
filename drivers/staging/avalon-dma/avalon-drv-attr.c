@@ -6,9 +6,9 @@ static ssize_t avalon_dma_stats_show(struct device *dev,
 				     struct device_attribute *attr, char *buf)
 {
 #ifdef AVALON_DEBUG_STATS
-	struct nerdic_device *nddc = dev_get_drvdata(dev);
+	struct avalon_dev *avalon_dev = dev_get_drvdata(dev);
 
-        return avalon_dma_print_stats(buf, PAGE_SIZE, &nddc->avalon_dma);
+        return avalon_dma_print_stats(buf, PAGE_SIZE, &avalon_dev->avalon_dma);
 #else
 	return -ENOSYS;
 #endif
@@ -19,9 +19,9 @@ static ssize_t avalon_dma_lists_show(struct device *dev,
 				     struct device_attribute *attr, char *buf)
 {
 #ifdef AVALON_DEBUG_STATS
-	struct nerdic_device *nddc = dev_get_drvdata(dev);
+	struct avalon_dev *avalon_dev = dev_get_drvdata(dev);
 
-        return avalon_dma_print_lists(buf, PAGE_SIZE, &nddc->avalon_dma);
+        return avalon_dma_print_lists(buf, PAGE_SIZE, &avalon_dev->avalon_dma);
 #else
 	return -ENOSYS;
 #endif
