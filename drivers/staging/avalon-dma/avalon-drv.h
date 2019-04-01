@@ -3,7 +3,7 @@
 
 #include <linux/miscdevice.h>
 
-#include "avalon-dma.h"
+#include "avalon-dma-core.h"
 
 #define DRIVER_VERSION "0.0.0"
 

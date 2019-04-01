@@ -2,7 +2,7 @@
 #include <linux/module.h>
 #include <linux/pci.h>
 
-#include "avalon-dma.h"
+#include "avalon-dma-core.h"
 #include "avalon-dma-util.h"
 
 #define BAR_AV_MM_DMA		0

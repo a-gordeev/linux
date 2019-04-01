@@ -1,6 +1,6 @@
 #include <linux/kernel.h>
 
-#include "avalon-dma.h"
+#include "avalon-dma-core.h"
 
 #ifdef AVALON_DEBUG_STATS
 

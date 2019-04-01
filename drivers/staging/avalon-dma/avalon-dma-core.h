@@ -1,5 +1,5 @@
-#ifndef __AVALON_DMA_H__
-#define __AVALON_DMA_H__
+#ifndef __AVALON_DMA_CORE_H__
+#define __AVALON_DMA_CORE_H__
 
 #include <linux/interrupt.h>
 #include <linux/dma-direction.h>
