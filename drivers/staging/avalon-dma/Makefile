@@ -9,5 +9,4 @@ avalon-dma-objs :=	avalon-dma-core.o \
 avalon-drv-objs :=	avalon-drv-core.o \
 			avalon-drv-fops.o \
 			avalon-drv-util.o \
-			avalon-drv-attr.o \
-			avalon-drv-interrupt.o
+			avalon-drv-attr.o
