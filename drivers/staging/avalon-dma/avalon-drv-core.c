@@ -44,7 +44,7 @@ static int __init avalon_pci_probe(struct pci_dev *pci_dev,
 	if (ret)
 		goto reg_err;
 
-	ret = init_interrupts(avalon_dev);
+	ret = init_interrupts(avalon_dev, pci_dev);
 	if (ret)
 		goto int_err;
 
