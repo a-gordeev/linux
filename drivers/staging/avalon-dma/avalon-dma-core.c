@@ -1,6 +1,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/pci.h>
+#include <linux/delay.h>
 
 #include "avalon-dma-core.h"
 #include "avalon-dma-util.h"
@@ -170,10 +171,52 @@ dma_set_mask_err:
 }
 EXPORT_SYMBOL_GPL(avalon_dma_init);
 
+static void avalon_dma_sync(struct avalon_dma *avalon_dma)
+{
+	struct list_head *head = &avalon_dma->desc_allocated;
+ 	struct avalon_dma_tx_descriptor *desc;
+	int nr_retries = 0;
+	unsigned long flags;
+
+	/*
+	 * FIXME Implement graceful race-free completion
+	 */
+again:
+	synchronize_irq(avalon_dma->pci_dev->irq);
+
+	spin_lock_irqsave(&avalon_dma->lock, flags);
+
+	if (!list_empty(&avalon_dma->desc_submitted) ||
+	    !list_empty(&avalon_dma->desc_issued) ||
+	    !list_empty(&avalon_dma->desc_completed)) {
+
+		spin_unlock_irqrestore(&avalon_dma->lock, flags);
+
+		msleep(250);
+		nr_retries++;
+
+		goto again;
+	}
+
+	BUG_ON(avalon_dma->active_desc);
+
+	list_splice_tail_init(&avalon_dma->desc_submitted, head);
+	list_splice_tail_init(&avalon_dma->desc_issued, head);
+	list_splice_tail_init(&avalon_dma->desc_completed, head);
+
+	list_for_each_entry(desc, head, node)
+		desc->direction = DMA_NONE;
+
+	spin_unlock_irqrestore(&avalon_dma->lock, flags);
+
+	WARN_ON_ONCE(nr_retries);
+}
+
 void avalon_dma_term(struct avalon_dma *av)
 {
 	struct device *dev = &av->pci_dev->dev;
 
+	avalon_dma_sync(av);
 	tasklet_kill(&av->tasklet);
 
 	dma_free_coherent(
