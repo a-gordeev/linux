@@ -95,60 +95,62 @@ struct avalon_dma_tx_descriptor *get_desc_locked(spinlock_t *lock,
 }
 #endif
 
-int avalon_dma_init(struct avalon_dma *av, struct pci_dev *pci_dev)
+int avalon_dma_init(struct avalon_dma *avalon_dma, struct pci_dev *pci_dev)
 {
 	struct device *dev = &pci_dev->dev;
 	int ret;
 
-	memset(av, 0, sizeof(*av));
-	spin_lock_init(&av->lock);
+	memset(avalon_dma, 0, sizeof(*avalon_dma));
+	spin_lock_init(&avalon_dma->lock);
 
-	av->pci_dev = pci_dev;
-	av->active_desc = NULL;
+	avalon_dma->pci_dev = pci_dev;
+	avalon_dma->active_desc = NULL;
 
-	av->h2d_last_id = -1;
-	av->d2h_last_id = -1;
+	avalon_dma->h2d_last_id = -1;
+	avalon_dma->d2h_last_id = -1;
 
-	INIT_LIST_HEAD(&av->desc_allocated);
-	INIT_LIST_HEAD(&av->desc_submitted);
-	INIT_LIST_HEAD(&av->desc_issued);
-	INIT_LIST_HEAD(&av->desc_completed);
+	INIT_LIST_HEAD(&avalon_dma->desc_allocated);
+	INIT_LIST_HEAD(&avalon_dma->desc_submitted);
+	INIT_LIST_HEAD(&avalon_dma->desc_issued);
+	INIT_LIST_HEAD(&avalon_dma->desc_completed);
 
 	ret = dma_set_mask_and_coherent(dev, DMA_BIT_MASK(64));
 	if (ret)
 		goto dma_set_mask_err;
 
-	av->regs = pci_ioremap_bar(pci_dev, BAR_AV_MM_DMA);
-	if (!av->regs) {
+	avalon_dma->regs = pci_ioremap_bar(pci_dev, BAR_AV_MM_DMA);
+	if (!avalon_dma->regs) {
 		ret = -ENOMEM;
 		goto ioremap_err;
 	}
 
-	ret = alloc_descs(&av->desc_allocated, AVALON_DMA_DESC_COUNT);
+	ret = alloc_descs(&avalon_dma->desc_allocated,
+			  AVALON_DMA_DESC_COUNT);
 	if (ret)
 		goto alloc_descs_err;
 
-	av->lite_table_rd_cpu_virt_addr = dma_alloc_coherent(
+	avalon_dma->lite_table_rd_cpu_virt_addr = dma_alloc_coherent(
 		dev,
 		sizeof(struct lite_dma_desc_table),
-		&av->lite_table_rd_bus_addr,
+		&avalon_dma->lite_table_rd_bus_addr,
 		GFP_KERNEL);
-	if (!av->lite_table_rd_cpu_virt_addr) {
+	if (!avalon_dma->lite_table_rd_cpu_virt_addr) {
 		ret = -ENOMEM;
 		goto alloc_rd_dma_table_err;
 	}
 
-	av->lite_table_wr_cpu_virt_addr = dma_alloc_coherent(
+	avalon_dma->lite_table_wr_cpu_virt_addr = dma_alloc_coherent(
 		dev,
 		sizeof(struct lite_dma_desc_table),
-		&av->lite_table_wr_bus_addr,
+		&avalon_dma->lite_table_wr_bus_addr,
 		GFP_KERNEL);
-	if (!av->lite_table_wr_cpu_virt_addr) {
+	if (!avalon_dma->lite_table_wr_cpu_virt_addr) {
 		ret = -ENOMEM;
 		goto alloc_wr_dma_table_err;
 	}
 
-	tasklet_init(&av->tasklet, avalon_dma_tasklet, (unsigned long)av);
+	tasklet_init(&avalon_dma->tasklet,
+		     avalon_dma_tasklet, (unsigned long)avalon_dma);
 
 	return 0;
 
@@ -156,14 +158,14 @@ alloc_wr_dma_table_err:
 	dma_free_coherent(
 		dev,
 		sizeof(struct lite_dma_desc_table),
-		av->lite_table_rd_cpu_virt_addr,
-		av->lite_table_rd_bus_addr);
+		avalon_dma->lite_table_rd_cpu_virt_addr,
+		avalon_dma->lite_table_rd_bus_addr);
 
 alloc_rd_dma_table_err:
-	free_descs(&av->desc_allocated);
+	free_descs(&avalon_dma->desc_allocated);
 
 alloc_descs_err:
-	pci_iounmap(av->pci_dev, av->regs);
+	pci_iounmap(avalon_dma->pci_dev, avalon_dma->regs);
 
 ioremap_err:
 dma_set_mask_err:
@@ -212,28 +214,28 @@ again:
 	WARN_ON_ONCE(nr_retries);
 }
 
-void avalon_dma_term(struct avalon_dma *av)
+void avalon_dma_term(struct avalon_dma *avalon_dma)
 {
-	struct device *dev = &av->pci_dev->dev;
+	struct device *dev = &avalon_dma->pci_dev->dev;
 
-	avalon_dma_sync(av);
-	tasklet_kill(&av->tasklet);
-
-	dma_free_coherent(
-		dev,
-		sizeof(struct lite_dma_desc_table),
-		av->lite_table_rd_cpu_virt_addr,
-		av->lite_table_rd_bus_addr);
+	avalon_dma_sync(avalon_dma);
+	tasklet_kill(&avalon_dma->tasklet);
 
 	dma_free_coherent(
 		dev,
 		sizeof(struct lite_dma_desc_table),
-		av->lite_table_wr_cpu_virt_addr,
-		av->lite_table_wr_bus_addr);
+		avalon_dma->lite_table_rd_cpu_virt_addr,
+		avalon_dma->lite_table_rd_bus_addr);
 
-	free_descs(&av->desc_allocated);
+	dma_free_coherent(
+		dev,
+		sizeof(struct lite_dma_desc_table),
+		avalon_dma->lite_table_wr_cpu_virt_addr,
+		avalon_dma->lite_table_wr_bus_addr);
 
-	pci_iounmap(av->pci_dev, av->regs);
+	free_descs(&avalon_dma->desc_allocated);
+
+	pci_iounmap(avalon_dma->pci_dev, avalon_dma->regs);
 }
 EXPORT_SYMBOL_GPL(avalon_dma_term);
 
