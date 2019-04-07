@@ -132,6 +132,7 @@ irqreturn_t avalon_dma_interrupt(struct avalon_dma *avalon_dma)
 
 	return IRQ_HANDLED;
 }
+EXPORT_SYMBOL_GPL(avalon_dma_interrupt);
 
 void avalon_dma_tasklet(unsigned long arg)
 {
