@@ -4,21 +4,8 @@
 #define ALTERA_DMA_DESCRIPTOR_NUM		128
 #define AVALON_MM_DMA_MAX_TANSFER_SIZE		(0x100000 - 0x100)
 
-#define ALTERA_LITE_DMA_RD_RC_LOW_SRC_ADDR	0x0000
-#define ALTERA_LITE_DMA_RD_RC_HIGH_SRC_ADDR	0x0004
-#define ALTERA_LITE_DMA_RD_CTLR_LOW_DEST_ADDR	0x0008
-#define ALTERA_LITE_DMA_RD_CTRL_HIGH_DEST_ADDR	0x000C
-#define ALTERA_LITE_DMA_RD_LAST_PTR		0x0010
-#define ALTERA_LITE_DMA_RD_TABLE_SIZE		0x0014
-#define ALTERA_LITE_DMA_RD_CONTROL		0x0018
-
-#define ALTERA_LITE_DMA_WR_RC_LOW_SRC_ADDR	0x0100
-#define ALTERA_LITE_DMA_WR_RC_HIGH_SRC_ADDR	0x0104
-#define ALTERA_LITE_DMA_WR_CTLR_LOW_DEST_ADDR	0x0108
-#define ALTERA_LITE_DMA_WR_CTRL_HIGH_DEST_ADDR	0x010C
-#define ALTERA_LITE_DMA_WR_LAST_PTR		0x0110
-#define ALTERA_LITE_DMA_WR_TABLE_SIZE		0x0114
-#define ALTERA_LITE_DMA_WR_CONTROL		0x0118
+#define RD_CTRL_OFFSET				0x0
+#define WR_CTRL_OFFSET				0x100
 
 #define ALTERA_DMA_NUM_DWORDS			512
 
@@ -29,6 +16,16 @@
 #define WR_CTRL_BUF_BASE_HI			0x00000000
 
 #undef AVALON_DEBUG_HW_REGS
+
+struct dma_controller {
+	u32 rc_low_src_addr;
+	u32 rc_high_src_addr;
+	u32 ctlr_low_dest_addr;
+	u32 ctrl_high_dest_addr;
+	u32 last_ptr;
+	u32 table_size;
+	u32 control;
+} __attribute__ ((packed));
 
 struct dma_descriptor {
 	u32 src_addr_ldw;
@@ -44,26 +41,40 @@ struct lite_dma_desc_table {
 	struct dma_descriptor descriptors[ALTERA_DMA_DESCRIPTOR_NUM];
 } __attribute__ ((packed));
 
-static inline u32 av_mm_dma_read32(void __iomem *addr, int reg)
+static inline
+u32 __av_rd(void __iomem *addr, size_t ctrl_off, size_t reg_off)
 {
-	u32 ret = ioread32(addr + DESC_CTRLLER_BASE + reg);
+	size_t offset = DESC_CTRLLER_BASE + ctrl_off + reg_off;
+	u32 ret = ioread32(addr + offset);
 
 #ifdef AVALON_DEBUG_HW_REGS
-	pr_warn("%s(%d): ioread32(%p, %x) = %x", __FUNCTION__, __LINE__,
-		addr, reg, ret);
+	pr_warn("%s(%d): ioread32(%p, %lx) = %x", __FUNCTION__, __LINE__,
+		addr, ctrl_off + reg_off, ret);
 #endif
 
 	return ret;
 }
 
-static inline void av_mm_dma_write32(u32 value, void __iomem *addr, int reg)
+static inline
+void __av_wr(u32 value, void __iomem *addr, size_t ctrl_off, size_t reg_off)
 {
+	size_t offset = DESC_CTRLLER_BASE + ctrl_off + reg_off;
+
 #ifdef AVALON_DEBUG_HW_REGS
-	pr_warn("%s(%d): iowrite32(%p, %x, %x)", __FUNCTION__, __LINE__,
-		addr, reg, value);
+	pr_warn("%s(%d): iowrite32(%p, %lx, %x)", __FUNCTION__, __LINE__,
+		addr, ctrl_off + reg_off, value);
 #endif
 
-	iowrite32(value, addr + DESC_CTRLLER_BASE + reg);
+	iowrite32(value, addr + offset);
 }
+
+#define av_rd_ctrl_read32(a, r) \
+	__av_rd(a, RD_CTRL_OFFSET, offsetof(struct dma_controller, r))
+#define av_rd_ctrl_write32(v, a, r) \
+	__av_wr(v, a, RD_CTRL_OFFSET, offsetof(struct dma_controller, r))
+#define av_wr_ctrl_read32(a, r) \
+	__av_rd(a, WR_CTRL_OFFSET, offsetof(struct dma_controller, r))
+#define av_wr_ctrl_write32(v, a, r) \
+	__av_wr(v, a, WR_CTRL_OFFSET, offsetof(struct dma_controller, r))
 
 #endif

@@ -241,26 +241,22 @@ EXPORT_SYMBOL_GPL(avalon_dma_term);
 
 static void start_write_xfer(void __iomem *av, dma_addr_t table, int last_id)
 {
-	av_mm_dma_write32(table >> 32, av, ALTERA_LITE_DMA_WR_RC_HIGH_SRC_ADDR);
-	av_mm_dma_write32(table, av, ALTERA_LITE_DMA_WR_RC_LOW_SRC_ADDR);
-
-	av_mm_dma_write32(WR_CTRL_BUF_BASE_HI, av, ALTERA_LITE_DMA_WR_CTRL_HIGH_DEST_ADDR);
-	av_mm_dma_write32(WR_CTRL_BUF_BASE_LOW, av, ALTERA_LITE_DMA_WR_CTLR_LOW_DEST_ADDR);
-
-	av_mm_dma_write32(last_id, av, ALTERA_LITE_DMA_WR_TABLE_SIZE);
-	av_mm_dma_write32(last_id, av, ALTERA_LITE_DMA_WR_LAST_PTR);
+	av_wr_ctrl_write32(table >> 32, av, rc_high_src_addr);
+	av_wr_ctrl_write32(table, av, rc_low_src_addr);
+	av_wr_ctrl_write32(WR_CTRL_BUF_BASE_HI, av, ctrl_high_dest_addr);
+	av_wr_ctrl_write32(WR_CTRL_BUF_BASE_LOW, av, ctlr_low_dest_addr);
+	av_wr_ctrl_write32(last_id, av, table_size);
+	av_wr_ctrl_write32(last_id, av, last_ptr);
 }
 
 static void start_read_xfer(void __iomem *av, dma_addr_t table, int last_id)
 {
-	av_mm_dma_write32(table >> 32, av, ALTERA_LITE_DMA_RD_RC_HIGH_SRC_ADDR);
-	av_mm_dma_write32(table, av, ALTERA_LITE_DMA_RD_RC_LOW_SRC_ADDR);
-
-	av_mm_dma_write32(RD_CTRL_BUF_BASE_HI, av, ALTERA_LITE_DMA_RD_CTRL_HIGH_DEST_ADDR);
-	av_mm_dma_write32(RD_CTRL_BUF_BASE_LOW, av, ALTERA_LITE_DMA_RD_CTLR_LOW_DEST_ADDR);
-
-	av_mm_dma_write32(last_id, av, ALTERA_LITE_DMA_RD_TABLE_SIZE);
-	av_mm_dma_write32(last_id, av, ALTERA_LITE_DMA_RD_LAST_PTR);
+	av_rd_ctrl_write32(table >> 32, av, rc_high_src_addr);
+	av_rd_ctrl_write32(table, av, rc_low_src_addr);
+	av_rd_ctrl_write32(RD_CTRL_BUF_BASE_HI, av, ctrl_high_dest_addr);
+	av_rd_ctrl_write32(RD_CTRL_BUF_BASE_LOW, av, ctlr_low_dest_addr);
+	av_rd_ctrl_write32(last_id, av, table_size);
+	av_rd_ctrl_write32(last_id, av, last_ptr);
 }
 
 static int submit_xfer(struct avalon_dma *avalon_dma,
