@@ -42,8 +42,8 @@ struct avalon_dma_tx_descriptor {
 };
 
 struct avalon_dma {
-	struct pci_dev *pci_dev;
 	spinlock_t lock;
+	struct pci_dev *pci_dev;
 	struct tasklet_struct tasklet;
 	unsigned int irq;
 
