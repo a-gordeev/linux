@@ -11,17 +11,8 @@
 #define DMA_STATUS_INT		0
 #define AVALON_MSI_COUNT	4
 
-static irqreturn_t dma_interrupt(int irq, void *dev_id)
+static int init_interrupts(struct pci_dev *pci_dev)
 {
-	struct avalon_dev *avalon_dev = (struct avalon_dev*)dev_id;
-
-	return avalon_dma_interrupt(&avalon_dev->avalon_dma);
-}
-
-static int init_interrupts(struct avalon_dev *avalon_dev,
-			   struct pci_dev *pci_dev)
-{
-	int vec;
 	int ret;
 
 	ret = pci_alloc_irq_vectors(pci_dev,
@@ -32,15 +23,13 @@ static int init_interrupts(struct avalon_dev *avalon_dev,
 	else if (ret != AVALON_MSI_COUNT)
 		goto nr_msi_err;
 
-	vec = pci_irq_vector(pci_dev, DMA_STATUS_INT);
-	ret = request_irq(vec, dma_interrupt, IRQF_SHARED,
-			  DRIVER_NAME, avalon_dev);
-	if (ret)
-		goto req_irq_err;
+	ret = pci_irq_vector(pci_dev, DMA_STATUS_INT);
+	if (ret < 0)
+		goto vec_err;
 
-	return 0;
+	return ret;
 
-req_irq_err:
+vec_err:
 nr_msi_err:
 	pci_disable_msi(pci_dev);
 
@@ -48,12 +37,8 @@ msi_err:
 	return ret;
 }
 
-static void term_interrupts(struct avalon_dev *avalon_dev)
+static void term_interrupts(struct pci_dev *pci_dev)
 {
-	struct pci_dev *pci_dev = avalon_dev->pci_dev;
-	int vec = pci_irq_vector(pci_dev, DMA_STATUS_INT);
-
-	free_irq(vec, (void*)avalon_dev);
 	pci_disable_msi(pci_dev);
 }
 static int avalon_dev_register(struct avalon_dev *avalon_dev,
@@ -91,11 +76,11 @@ static int __init avalon_pci_probe(struct pci_dev *pci_dev,
 	if (ret)
 		goto reg_err;
 
-	ret = init_interrupts(avalon_dev, pci_dev);
-	if (ret)
+	ret = init_interrupts(pci_dev);
+	if (ret < 0)
 		goto int_err;
 
-	ret = avalon_dma_init(&avalon_dev->avalon_dma, pci_dev);
+	ret = avalon_dma_init(&avalon_dev->avalon_dma, ret, pci_dev);
 	if (ret)
 		goto dma_err;
 
@@ -122,7 +107,7 @@ dev_reg_err:
 	avalon_dma_term(&avalon_dev->avalon_dma);
 
 dma_err:
-	term_interrupts(avalon_dev);
+	term_interrupts(pci_dev);
 
 int_err:
 	pci_release_regions(pci_dev);
@@ -147,7 +132,7 @@ static void __exit avalon_pci_remove(struct pci_dev *pci_dev)
 
 	avalon_dma_term(&avalon_dev->avalon_dma);
 
-	term_interrupts(avalon_dev);
+	term_interrupts(pci_dev);
 
 	pci_release_regions(pci_dev);
 	pci_disable_device(pci_dev);

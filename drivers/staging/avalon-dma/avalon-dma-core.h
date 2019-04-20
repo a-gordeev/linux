@@ -4,6 +4,8 @@
 #include <linux/interrupt.h>
 #include <linux/dma-direction.h>
 
+#define INTERRUPT_NAME	"avalon_dma"
+
 struct avalon_dma;
 
 typedef void (*avalon_dma_xfer_callback)(void *dma_async_param);
@@ -43,6 +45,7 @@ struct avalon_dma {
 	struct pci_dev *pci_dev;
 	spinlock_t lock;
 	struct tasklet_struct tasklet;
+	unsigned int irq;
 
 	struct avalon_dma_tx_descriptor *active_desc;
 	struct list_head desc_allocated;
@@ -62,7 +65,9 @@ struct avalon_dma {
 	void __iomem *regs;
 };
 
-int avalon_dma_init(struct avalon_dma *avalon_dma, struct pci_dev *pci_dev);
+int avalon_dma_init(struct avalon_dma *avalon_dma,
+		    unsigned int irq,
+		    struct pci_dev *pci_dev);
 void avalon_dma_term(struct avalon_dma *avalon_dma);
 
 int avalon_dma_submit_xfer(struct avalon_dma *avalon_dma,
@@ -78,10 +83,8 @@ int avalon_dma_submit_xfer_sg(struct avalon_dma *avalon_dma,
 			      void *callback_param);
 int avalon_dma_issue_pending(struct avalon_dma *avalon_dma);
 
-irqreturn_t avalon_dma_interrupt(struct avalon_dma *avalon_dma);
 int avalon_dma_start_xfer(struct avalon_dma *avalon_dma,
 			  struct avalon_dma_tx_descriptor *desc);
-void avalon_dma_tasklet(unsigned long);
 
 #endif
 

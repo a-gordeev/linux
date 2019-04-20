@@ -5,6 +5,7 @@
 
 #include "avalon-dma-core.h"
 #include "avalon-dma-util.h"
+#include "avalon-dma-interrupt.h"
 
 #define BAR_AV_MM_DMA		0
 
@@ -95,7 +96,9 @@ struct avalon_dma_tx_descriptor *get_desc_locked(spinlock_t *lock,
 }
 #endif
 
-int avalon_dma_init(struct avalon_dma *avalon_dma, struct pci_dev *pci_dev)
+int avalon_dma_init(struct avalon_dma *avalon_dma,
+		    unsigned int irq,
+		    struct pci_dev *pci_dev)
 {
 	struct device *dev = &pci_dev->dev;
 	int ret;
@@ -152,7 +155,17 @@ int avalon_dma_init(struct avalon_dma *avalon_dma, struct pci_dev *pci_dev)
 	tasklet_init(&avalon_dma->tasklet,
 		     avalon_dma_tasklet, (unsigned long)avalon_dma);
 
+	ret = request_irq(irq, avalon_dma_interrupt, IRQF_SHARED,
+			  INTERRUPT_NAME, avalon_dma);
+	if (ret)
+		goto req_irq_err;
+
+	avalon_dma->irq = irq;
+
 	return 0;
+
+req_irq_err:
+	tasklet_kill(&avalon_dma->tasklet);
 
 alloc_wr_dma_table_err:
 	dma_free_coherent(
@@ -219,6 +232,8 @@ void avalon_dma_term(struct avalon_dma *avalon_dma)
 	struct device *dev = &avalon_dma->pci_dev->dev;
 
 	avalon_dma_sync(avalon_dma);
+
+	free_irq(avalon_dma->irq, (void*)avalon_dma);
 	tasklet_kill(&avalon_dma->tasklet);
 
 	dma_free_coherent(
