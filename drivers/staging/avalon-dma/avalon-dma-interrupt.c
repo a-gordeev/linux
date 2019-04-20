@@ -3,7 +3,6 @@
 
 #include "avalon-dma-hw.h"
 #include "avalon-dma-core.h"
-#include "avalon-dma-stats.h"
 
 static bool dma_desc_done(struct avalon_dma_tx_descriptor *desc)
 {
@@ -40,19 +39,6 @@ irqreturn_t avalon_dma_interrupt(struct avalon_dma *avalon_dma)
 	bool wr_done;
 	bool desc_done;
 
-#ifdef AVALON_DEBUG_STATS
-	unsigned int nr_polls = 0;
-	u64 lt_hardirq_start;
-	u64 lt_poll_flags;
-	u64 lt_handle_descs;
-	u64 lt_handle_done;
-	u64 lt_hardirq_done;
-#endif
-
-#ifdef AVALON_DEBUG_STATS
-	lt_hardirq_start = local_clock();
-#endif
-
 	spin_lock(&avalon_dma->lock);
 
 	rd_done = (avalon_dma->h2d_last_id < 0);
@@ -63,25 +49,13 @@ irqreturn_t avalon_dma_interrupt(struct avalon_dma *avalon_dma)
 		return IRQ_NONE;
 	}
 
-#ifdef AVALON_DEBUG_STATS
-	lt_poll_flags = local_clock();
-#endif
-
 	do {
 		if (!rd_done && rd_flags[avalon_dma->h2d_last_id])
 			rd_done = true;
 
 		if (!wr_done && wr_flags[avalon_dma->d2h_last_id])
 			wr_done = true;
-
-#ifdef AVALON_DEBUG_STATS
-		nr_polls++;
-#endif
 	} while (!rd_done || !wr_done);
-
-#ifdef AVALON_DEBUG_STATS
-	lt_handle_descs = local_clock();
-#endif
 
 	avalon_dma->h2d_last_id = -1;
 	avalon_dma->d2h_last_id = -1;
@@ -109,26 +83,10 @@ irqreturn_t avalon_dma_interrupt(struct avalon_dma *avalon_dma)
 		avalon_dma_start_xfer(avalon_dma, desc);
 	}
 
-#ifdef AVALON_DEBUG_STATS
-	lt_handle_done = local_clock();
-#endif
-
 	spin_unlock(&avalon_dma->lock);
 
 	if (desc_done)
 		tasklet_schedule(&avalon_dma->tasklet);
-
-#ifdef AVALON_DEBUG_STATS
-	lt_hardirq_done = local_clock();
-#endif
-
-#ifdef AVALON_DEBUG_STATS
-	st_lt_inc(&avalon_dma->st_polling, lt_handle_descs - lt_poll_flags);
-	st_lt_inc(&avalon_dma->st_start_tx, lt_handle_done - lt_handle_descs);
-	st_lt_inc(&avalon_dma->st_tasklet, lt_hardirq_done - lt_handle_done);
-	st_lt_inc(&avalon_dma->st_hardirq, lt_hardirq_done - lt_hardirq_start);
-	st_int_inc(&avalon_dma->st_nr_polls, nr_polls);
-#endif
 
 	return IRQ_HANDLED;
 }

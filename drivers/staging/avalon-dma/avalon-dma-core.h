@@ -4,8 +4,6 @@
 #include <linux/interrupt.h>
 #include <linux/dma-direction.h>
 
-#include "avalon-dma-stats.h"
-
 struct avalon_dma;
 
 typedef void (*avalon_dma_xfer_callback)(void *dma_async_param);
@@ -62,14 +60,6 @@ struct avalon_dma {
 	int d2h_last_id;
 
 	void __iomem *regs;
-
-#ifdef AVALON_DEBUG_STATS
-	struct stats_time st_polling;
-	struct stats_time st_start_tx;
-	struct stats_time st_tasklet;
-	struct stats_time st_hardirq;
-	struct stats_int st_nr_polls;
-#endif
 };
 
 int avalon_dma_init(struct avalon_dma *avalon_dma, struct pci_dev *pci_dev);

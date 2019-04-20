@@ -3,7 +3,6 @@ obj-$(CONFIG_AVALON_DRV)	+= avalon-drv.o
 
 avalon-dma-objs :=	avalon-dma-core.o \
 			avalon-dma-util.o \
-			avalon-dma-stats.o \
 			avalon-dma-interrupt.o
 
 avalon-drv-objs :=	avalon-drv-core.o \
