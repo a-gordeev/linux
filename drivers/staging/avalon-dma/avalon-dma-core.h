@@ -43,7 +43,7 @@ struct avalon_dma_tx_descriptor {
 
 struct avalon_dma {
 	spinlock_t lock;
-	struct pci_dev *pci_dev;
+	struct device *dev;
 	struct tasklet_struct tasklet;
 	unsigned int irq;
 
@@ -66,8 +66,9 @@ struct avalon_dma {
 };
 
 int avalon_dma_init(struct avalon_dma *avalon_dma,
-		    unsigned int irq,
-		    struct pci_dev *pci_dev);
+		    struct device *dev,
+		    void __iomem *regs,
+		    unsigned int irq);
 void avalon_dma_term(struct avalon_dma *avalon_dma);
 
 int avalon_dma_submit_xfer(struct avalon_dma *avalon_dma,

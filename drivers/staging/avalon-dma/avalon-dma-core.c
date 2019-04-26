@@ -7,8 +7,6 @@
 #include "avalon-dma-util.h"
 #include "avalon-dma-interrupt.h"
 
-#define BAR_AV_MM_DMA		0
-
 #define AVALON_DMA_DESC_ALLOC
 #define AVALON_DMA_DESC_COUNT	0
 
@@ -97,16 +95,18 @@ struct avalon_dma_tx_descriptor *get_desc_locked(spinlock_t *lock,
 #endif
 
 int avalon_dma_init(struct avalon_dma *avalon_dma,
-		    unsigned int irq,
-		    struct pci_dev *pci_dev)
+		    struct device *dev,
+		    void __iomem *regs,
+		    unsigned int irq)
 {
-	struct device *dev = &pci_dev->dev;
 	int ret;
 
 	memset(avalon_dma, 0, sizeof(*avalon_dma));
+
 	spin_lock_init(&avalon_dma->lock);
 
-	avalon_dma->pci_dev = pci_dev;
+	avalon_dma->dev = dev;
+	avalon_dma->regs = regs;
 	avalon_dma->active_desc = NULL;
 
 	avalon_dma->h2d_last_id = -1;
@@ -120,12 +120,6 @@ int avalon_dma_init(struct avalon_dma *avalon_dma,
 	ret = dma_set_mask_and_coherent(dev, DMA_BIT_MASK(64));
 	if (ret)
 		goto dma_set_mask_err;
-
-	avalon_dma->regs = pci_ioremap_bar(pci_dev, BAR_AV_MM_DMA);
-	if (!avalon_dma->regs) {
-		ret = -ENOMEM;
-		goto ioremap_err;
-	}
 
 	ret = alloc_descs(&avalon_dma->desc_allocated,
 			  AVALON_DMA_DESC_COUNT);
@@ -160,8 +154,6 @@ int avalon_dma_init(struct avalon_dma *avalon_dma,
 	if (ret)
 		goto req_irq_err;
 
-	avalon_dma->irq = irq;
-
 	return 0;
 
 req_irq_err:
@@ -178,9 +170,6 @@ alloc_rd_dma_table_err:
 	free_descs(&avalon_dma->desc_allocated);
 
 alloc_descs_err:
-	pci_iounmap(avalon_dma->pci_dev, avalon_dma->regs);
-
-ioremap_err:
 dma_set_mask_err:
 	return ret;
 }
@@ -197,7 +186,7 @@ static void avalon_dma_sync(struct avalon_dma *avalon_dma)
 	 * FIXME Implement graceful race-free completion
 	 */
 again:
-	synchronize_irq(avalon_dma->pci_dev->irq);
+	synchronize_irq(avalon_dma->irq);
 
 	spin_lock_irqsave(&avalon_dma->lock, flags);
 
@@ -229,7 +218,7 @@ again:
 
 void avalon_dma_term(struct avalon_dma *avalon_dma)
 {
-	struct device *dev = &avalon_dma->pci_dev->dev;
+	struct device *dev = avalon_dma->dev;
 
 	avalon_dma_sync(avalon_dma);
 
@@ -250,7 +239,7 @@ void avalon_dma_term(struct avalon_dma *avalon_dma)
 
 	free_descs(&avalon_dma->desc_allocated);
 
-	pci_iounmap(avalon_dma->pci_dev, avalon_dma->regs);
+	iounmap(avalon_dma->regs);
 }
 EXPORT_SYMBOL_GPL(avalon_dma_term);
 

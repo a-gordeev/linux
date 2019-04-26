@@ -8,6 +8,8 @@
 
 #define PCI_VENDOR_ID_ALARIC	0x1172
 
+#define BAR_AV_MM_DMA		0
+
 #define DMA_STATUS_INT		0
 #define AVALON_MSI_COUNT	4
 
@@ -62,6 +64,7 @@ static int __init avalon_pci_probe(struct pci_dev *pci_dev,
 				   const struct pci_device_id *id)
 {
 	struct avalon_dev *avalon_dev;
+	void __iomem *regs;
 	int ret;
 
 	avalon_dev = kzalloc(sizeof(*avalon_dev), GFP_KERNEL);
@@ -76,11 +79,18 @@ static int __init avalon_pci_probe(struct pci_dev *pci_dev,
 	if (ret)
 		goto reg_err;
 
+	regs = pci_ioremap_bar(pci_dev, BAR_AV_MM_DMA);
+	if (!regs) {
+		ret = -ENOMEM;
+		goto ioremap_err;
+	}
+
 	ret = init_interrupts(pci_dev);
 	if (ret < 0)
 		goto int_err;
 
-	ret = avalon_dma_init(&avalon_dev->avalon_dma, ret, pci_dev);
+	ret = avalon_dma_init(&avalon_dev->avalon_dma,
+			      &pci_dev->dev, regs, ret);
 	if (ret)
 		goto dma_err;
 
@@ -110,6 +120,9 @@ dma_err:
 	term_interrupts(pci_dev);
 
 int_err:
+	pci_iounmap(pci_dev, regs);
+
+ioremap_err:
 	pci_release_regions(pci_dev);
 
 reg_err:

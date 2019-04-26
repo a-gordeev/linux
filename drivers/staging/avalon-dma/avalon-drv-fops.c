@@ -310,7 +310,7 @@ static int kthread_xfer_rw_sg(struct avalon_dma *avalon_dma,
 			      dma_addr_t dev_addr, struct sg_table *sgt,
 			      void (*xfer_callback)(void *dma_async_param))
 {
-	struct device *dev = &avalon_dma->pci_dev->dev;
+	struct device *dev = avalon_dma->dev;
 	struct xfer_callback_info info;
 	int ret = 0;
 	int i;
@@ -452,7 +452,7 @@ static int xfer_rw_sg(struct avalon_dma *avalon_dma,
 		      dma_addr_t dev_addr, struct sg_table *sgt,
 		      void (*xfer_callback)(void *dma_async_param))
 {
-	struct device *dev = &avalon_dma->pci_dev->dev;
+	struct device *dev = avalon_dma->dev;
 	struct xfer_callback_info info;
 	int ret = 0;
 	int i;
