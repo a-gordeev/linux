@@ -4,8 +4,6 @@
 #include <linux/scatterlist.h>
 #include <linux/dma-direction.h>
 
-#include "avalon-dma-hw.h"
-
 #define DMA_DESCRIPTOR_MAX	ALTERA_DMA_DESCRIPTOR_NUM
 
 int setup_descs(struct dma_descriptor *descs, unsigned int desc_id,

@@ -1,6 +1,8 @@
 #include <linux/kernel.h>
 #include <linux/scatterlist.h>
 
+#include <linux/avalon-dma-hw.h>
+
 #include "avalon-dma-util.h"
 
 void setup_desc(struct dma_descriptor *desc, u32 desc_id,

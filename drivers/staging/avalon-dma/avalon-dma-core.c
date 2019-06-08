@@ -3,6 +3,8 @@
 #include <linux/pci.h>
 #include <linux/delay.h>
 
+#include <linux/avalon-dma.h>
+
 #include "avalon-dma-core.h"
 #include "avalon-dma-util.h"
 #include "avalon-dma-interrupt.h"

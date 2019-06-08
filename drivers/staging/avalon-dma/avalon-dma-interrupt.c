@@ -1,7 +1,6 @@
 #include <linux/kernel.h>
 #include <linux/pci.h>
 
-#include "avalon-dma-hw.h"
 #include "avalon-dma-core.h"
 
 static bool dma_desc_done(struct avalon_dma_tx_descriptor *desc)

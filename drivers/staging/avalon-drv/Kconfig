@@ -1,0 +1,5 @@
+config AVALON_DRV
+	depends on AVALON_DMA
+	tristate "Avalon DMA driver"
+	help
+	  This selects a driver for Avalon DMA

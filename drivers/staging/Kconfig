@@ -123,5 +123,6 @@ source "drivers/staging/axis-fifo/Kconfig"
 source "drivers/staging/erofs/Kconfig"
 
 source "drivers/staging/avalon-dma/Kconfig"
+source "drivers/staging/avalon-drv/Kconfig"
 
 endif # STAGING
