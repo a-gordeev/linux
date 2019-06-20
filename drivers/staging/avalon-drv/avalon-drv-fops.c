@@ -18,9 +18,10 @@
 #include <linux/kthread.h>
 #include <linux/sched/signal.h>
 
+#include <uapi/linux/avalon-drv-ioctl.h>
+
 #include "avalon-drv.h"
 #include "avalon-drv-fops.h"
-#include "avalon-drv-ioctl.h"
 #include "avalon-drv-util.h"
 #include "avalon-drv-memmap.h"
 
