@@ -710,12 +710,12 @@ static long avalon_dev_ioctl(struct file *file, unsigned int cmd, unsigned long 
 	dev_info(dev, "%s(%d) { cmd %d", __FUNCTION__, __LINE__, cmd);
 
 	switch (cmd) {
-	case IOCTL_ALARIC_DMA_READ:
-	case IOCTL_ALARIC_DMA_WRITE:
-	case IOCTL_ALARIC_DMA_READ_SG:
-	case IOCTL_ALARIC_DMA_WRITE_SG:
-	case IOCTL_ALARIC_DMA_READ_SG_SMP:
-	case IOCTL_ALARIC_DMA_WRITE_SG_SMP:
+	case IOCTL_AVALON_DMA_READ:
+	case IOCTL_AVALON_DMA_WRITE:
+	case IOCTL_AVALON_DMA_READ_SG:
+	case IOCTL_AVALON_DMA_WRITE_SG:
+	case IOCTL_AVALON_DMA_READ_SG_SMP:
+	case IOCTL_AVALON_DMA_WRITE_SG_SMP:
 		if (copy_from_user(iovec, (void*)arg, sizeof(iovec[0]))) {
 			ret = -EFAULT;
 			goto done;
@@ -729,8 +729,8 @@ static long avalon_dev_ioctl(struct file *file, unsigned int cmd, unsigned long 
 
 		break;
 
-	case IOCTL_ALARIC_DMA_SIMULTANEOUS:
-	case IOCTL_ALARIC_DMA_SIMULTANEOUS_SG:
+	case IOCTL_AVALON_DMA_RDWR:
+	case IOCTL_AVALON_DMA_RDWR_SG:
 		if (copy_from_user(iovec, (void*)arg, sizeof(iovec))) {
 			ret = -EFAULT;
 			goto done;
@@ -754,30 +754,30 @@ static long avalon_dev_ioctl(struct file *file, unsigned int cmd, unsigned long 
 	};
 
 	switch (cmd) {
-	case IOCTL_ALARIC_DMA_READ:
+	case IOCTL_AVALON_DMA_READ:
 		ret = ioctl_xfer_rw(avalon_dev, DMA_FROM_DEVICE, buf, len);
 		break;
-	case IOCTL_ALARIC_DMA_WRITE:
+	case IOCTL_AVALON_DMA_WRITE:
 		ret = ioctl_xfer_rw(avalon_dev, DMA_TO_DEVICE, buf, len);
 		break;
-	case IOCTL_ALARIC_DMA_SIMULTANEOUS:
+	case IOCTL_AVALON_DMA_RDWR:
 		ret = ioctl_xfer_simultaneous(avalon_dev,
 					      buf_rd, len_rd,
 					      buf_wr, len_wr);
 		break;
-	case IOCTL_ALARIC_DMA_READ_SG:
+	case IOCTL_AVALON_DMA_READ_SG:
 		ret = ioctl_xfer_rw_sg(avalon_dev, DMA_FROM_DEVICE, buf, len, false);
 		break;
-	case IOCTL_ALARIC_DMA_WRITE_SG:
+	case IOCTL_AVALON_DMA_WRITE_SG:
 		ret = ioctl_xfer_rw_sg(avalon_dev, DMA_TO_DEVICE, buf, len, false);
 		break;
-	case IOCTL_ALARIC_DMA_READ_SG_SMP:
+	case IOCTL_AVALON_DMA_READ_SG_SMP:
 		ret = ioctl_xfer_rw_sg(avalon_dev, DMA_FROM_DEVICE, buf, len, true);
 		break;
-	case IOCTL_ALARIC_DMA_WRITE_SG_SMP:
+	case IOCTL_AVALON_DMA_WRITE_SG_SMP:
 		ret = ioctl_xfer_rw_sg(avalon_dev, DMA_TO_DEVICE, buf, len, true);
 		break;
-	case IOCTL_ALARIC_DMA_SIMULTANEOUS_SG:
+	case IOCTL_AVALON_DMA_RDWR_SG:
 		ret = ioctl_xfer_simultaneous_sg(avalon_dev,
 						 buf_rd, len_rd,
 						 buf_wr, len_wr);
