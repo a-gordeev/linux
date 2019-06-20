@@ -32,10 +32,12 @@ static int init_interrupts(struct pci_dev *pci_dev)
 	ret = pci_alloc_irq_vectors(pci_dev,
 				    AVALON_MSI_COUNT, AVALON_MSI_COUNT,
 				    PCI_IRQ_MSI);
-	if (ret < 0)
+	if (ret < 0) {
 		goto msi_err;
-	else if (ret != AVALON_MSI_COUNT)
+	} else if (ret != AVALON_MSI_COUNT) {
+		ret = -ENOSPC;
 		goto nr_msi_err;
+	}
 
 	ret = pci_irq_vector(pci_dev, DMA_STATUS_INT);
 	if (ret < 0)
@@ -55,6 +57,7 @@ static void term_interrupts(struct pci_dev *pci_dev)
 {
 	pci_disable_msi(pci_dev);
 }
+
 static int avalon_dev_register(struct avalon_dev *avalon_dev,
 			       const struct file_operations *fops)
 {
