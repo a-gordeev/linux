@@ -67,5 +67,7 @@ int avalon_dma_submit_xfer_sg(struct avalon_dma *avalon_dma,
 			      void *callback_param);
 int avalon_dma_issue_pending(struct avalon_dma *avalon_dma);
 
-#endif
+#define TARGET_MEM_BASE		CONFIG_AVALON_DMA_TARGET_BASE
+#define TARGET_MEM_SIZE		CONFIG_AVALON_DMA_TARGET_SIZE
 
+#endif

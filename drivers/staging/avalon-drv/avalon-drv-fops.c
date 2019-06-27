@@ -23,7 +23,6 @@
 #include "avalon-drv.h"
 #include "avalon-drv-fops.h"
 #include "avalon-drv-util.h"
-#include "avalon-drv-memmap.h"
 
 static const gfp_t gfp_flags	= GFP_KERNEL;
 static const size_t dma_size	= 2 * AVALON_MM_DMA_MAX_TANSFER_SIZE;

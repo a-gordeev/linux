@@ -261,8 +261,8 @@ static void start_write_xfer(void __iomem *av, dma_addr_t table, int last_id)
 {
 	av_wr_ctrl_write32(table >> 32, av, rc_high_src_addr);
 	av_wr_ctrl_write32(table, av, rc_low_src_addr);
-	av_wr_ctrl_write32(WR_CTRL_BUF_BASE_HI, av, ctrl_high_dest_addr);
-	av_wr_ctrl_write32(WR_CTRL_BUF_BASE_LOW, av, ctlr_low_dest_addr);
+	av_wr_ctrl_write32(AVALON_DMA_WR_EP_DST_HI, av, ctrl_high_dest_addr);
+	av_wr_ctrl_write32(AVALON_DMA_WR_EP_DST_LO, av, ctlr_low_dest_addr);
 	av_wr_ctrl_write32(last_id, av, table_size);
 	av_wr_ctrl_write32(last_id, av, last_ptr);
 }
@@ -271,8 +271,8 @@ static void start_read_xfer(void __iomem *av, dma_addr_t table, int last_id)
 {
 	av_rd_ctrl_write32(table >> 32, av, rc_high_src_addr);
 	av_rd_ctrl_write32(table, av, rc_low_src_addr);
-	av_rd_ctrl_write32(RD_CTRL_BUF_BASE_HI, av, ctrl_high_dest_addr);
-	av_rd_ctrl_write32(RD_CTRL_BUF_BASE_LOW, av, ctlr_low_dest_addr);
+	av_rd_ctrl_write32(AVALON_DMA_RD_EP_DST_HI, av, ctrl_high_dest_addr);
+	av_rd_ctrl_write32(AVALON_DMA_RD_EP_DST_LO, av, ctlr_low_dest_addr);
 	av_rd_ctrl_write32(last_id, av, table_size);
 	av_rd_ctrl_write32(last_id, av, last_ptr);
 }
