@@ -140,22 +140,22 @@ int avalon_dma_init(struct avalon_dma *avalon_dma,
 	if (ret)
 		goto alloc_descs_err;
 
-	avalon_dma->lite_table_rd_cpu_virt_addr = dma_alloc_coherent(
+	avalon_dma->table_rd_cpu_virt_addr = dma_alloc_coherent(
 		dev,
-		sizeof(struct lite_dma_desc_table),
-		&avalon_dma->lite_table_rd_bus_addr,
+		sizeof(struct dma_desc_table),
+		&avalon_dma->table_rd_bus_addr,
 		GFP_KERNEL);
-	if (!avalon_dma->lite_table_rd_cpu_virt_addr) {
+	if (!avalon_dma->table_rd_cpu_virt_addr) {
 		ret = -ENOMEM;
 		goto alloc_rd_dma_table_err;
 	}
 
-	avalon_dma->lite_table_wr_cpu_virt_addr = dma_alloc_coherent(
+	avalon_dma->table_wr_cpu_virt_addr = dma_alloc_coherent(
 		dev,
-		sizeof(struct lite_dma_desc_table),
-		&avalon_dma->lite_table_wr_bus_addr,
+		sizeof(struct dma_desc_table),
+		&avalon_dma->table_wr_bus_addr,
 		GFP_KERNEL);
-	if (!avalon_dma->lite_table_wr_cpu_virt_addr) {
+	if (!avalon_dma->table_wr_cpu_virt_addr) {
 		ret = -ENOMEM;
 		goto alloc_wr_dma_table_err;
 	}
@@ -176,9 +176,9 @@ req_irq_err:
 alloc_wr_dma_table_err:
 	dma_free_coherent(
 		dev,
-		sizeof(struct lite_dma_desc_table),
-		avalon_dma->lite_table_rd_cpu_virt_addr,
-		avalon_dma->lite_table_rd_bus_addr);
+		sizeof(struct dma_desc_table),
+		avalon_dma->table_rd_cpu_virt_addr,
+		avalon_dma->table_rd_bus_addr);
 
 alloc_rd_dma_table_err:
 	free_descs(&avalon_dma->desc_allocated);
@@ -241,15 +241,15 @@ void avalon_dma_term(struct avalon_dma *avalon_dma)
 
 	dma_free_coherent(
 		dev,
-		sizeof(struct lite_dma_desc_table),
-		avalon_dma->lite_table_rd_cpu_virt_addr,
-		avalon_dma->lite_table_rd_bus_addr);
+		sizeof(struct dma_desc_table),
+		avalon_dma->table_rd_cpu_virt_addr,
+		avalon_dma->table_rd_bus_addr);
 
 	dma_free_coherent(
 		dev,
-		sizeof(struct lite_dma_desc_table),
-		avalon_dma->lite_table_wr_cpu_virt_addr,
-		avalon_dma->lite_table_wr_bus_addr);
+		sizeof(struct dma_desc_table),
+		avalon_dma->table_wr_cpu_virt_addr,
+		avalon_dma->table_wr_bus_addr);
 
 	free_descs(&avalon_dma->desc_allocated);
 
@@ -259,20 +259,20 @@ EXPORT_SYMBOL_GPL(avalon_dma_term);
 
 static void start_write_xfer(void __iomem *av, dma_addr_t table, int last_id)
 {
-	av_wr_ctrl_write32(table >> 32, av, rc_high_src_addr);
-	av_wr_ctrl_write32(table, av, rc_low_src_addr);
-	av_wr_ctrl_write32(AVALON_DMA_WR_EP_DST_HI, av, ctrl_high_dest_addr);
-	av_wr_ctrl_write32(AVALON_DMA_WR_EP_DST_LO, av, ctlr_low_dest_addr);
+	av_wr_ctrl_write32(table >> 32, av, rc_src_hi);
+	av_wr_ctrl_write32(table, av, rc_src_lo);
+	av_wr_ctrl_write32(AVALON_DMA_WR_EP_DST_HI, av, ep_dst_hi);
+	av_wr_ctrl_write32(AVALON_DMA_WR_EP_DST_LO, av, ep_dst_lo);
 	av_wr_ctrl_write32(last_id, av, table_size);
 	av_wr_ctrl_write32(last_id, av, last_ptr);
 }
 
 static void start_read_xfer(void __iomem *av, dma_addr_t table, int last_id)
 {
-	av_rd_ctrl_write32(table >> 32, av, rc_high_src_addr);
-	av_rd_ctrl_write32(table, av, rc_low_src_addr);
-	av_rd_ctrl_write32(AVALON_DMA_RD_EP_DST_HI, av, ctrl_high_dest_addr);
-	av_rd_ctrl_write32(AVALON_DMA_RD_EP_DST_LO, av, ctlr_low_dest_addr);
+	av_rd_ctrl_write32(table >> 32, av, rc_src_hi);
+	av_rd_ctrl_write32(table, av, rc_src_lo);
+	av_rd_ctrl_write32(AVALON_DMA_RD_EP_DST_HI, av, ep_dst_hi);
+	av_rd_ctrl_write32(AVALON_DMA_RD_EP_DST_LO, av, ep_dst_lo);
 	av_rd_ctrl_write32(last_id, av, table_size);
 	av_rd_ctrl_write32(last_id, av, last_ptr);
 }
@@ -395,7 +395,7 @@ int avalon_dma_submit_xfer_sg(struct avalon_dma *avalon_dma,
 }
 EXPORT_SYMBOL_GPL(avalon_dma_submit_xfer_sg);
 
-static int setup_dma_descs_buf(struct dma_descriptor *dma_descs,
+static int setup_dma_descs_buf(struct dma_desc *dma_descs,
 			       struct avalon_dma_tx_descriptor *desc)
 {
 	struct xfer_buffer *xfer_buffer = &desc->xfer_info.xfer_buffer;
@@ -416,7 +416,7 @@ static int setup_dma_descs_buf(struct dma_descriptor *dma_descs,
 	return ret;
 }
 
-static int setup_dma_descs_sg(struct dma_descriptor *dma_descs,
+static int setup_dma_descs_sg(struct dma_desc *dma_descs,
 			      struct avalon_dma_tx_descriptor *desc)
 {
 	struct xfer_sg_table *xfer_sg_table = &desc->xfer_info.xfer_sg_table;
@@ -442,7 +442,7 @@ static int setup_dma_descs_sg(struct dma_descriptor *dma_descs,
 	return ret;
 }
 
-static int setup_dma_descs(struct dma_descriptor *dma_descs,
+static int setup_dma_descs(struct dma_desc *dma_descs,
 			   struct avalon_dma_tx_descriptor *desc)
 {
 	int ret;
@@ -462,7 +462,7 @@ static int setup_dma_descs(struct dma_descriptor *dma_descs,
 static int avalon_dma_start_read_xfer(struct avalon_dma *avalon_dma,
 				      struct avalon_dma_tx_descriptor *desc)
 {
-	struct lite_dma_desc_table *table = avalon_dma->lite_table_wr_cpu_virt_addr;
+	struct dma_desc_table *table = avalon_dma->table_wr_cpu_virt_addr;
 	int nr_descs;
 	int last_id;
 
@@ -472,14 +472,14 @@ static int avalon_dma_start_read_xfer(struct avalon_dma *avalon_dma,
 
 	memset(&table->flags, 0, sizeof(table->flags));
 
-	nr_descs = setup_dma_descs(table->descriptors, desc);
+	nr_descs = setup_dma_descs(table->descs, desc);
 	if (WARN_ON(nr_descs < 1))
 		return nr_descs;
 
 	last_id = nr_descs - 1;
 	avalon_dma->d2h_last_id = last_id;
 
-	start_write_xfer(avalon_dma->regs, avalon_dma->lite_table_wr_bus_addr, last_id);
+	start_write_xfer(avalon_dma->regs, avalon_dma->table_wr_bus_addr, last_id);
 
 	return 0;
 }
@@ -487,7 +487,7 @@ static int avalon_dma_start_read_xfer(struct avalon_dma *avalon_dma,
 static int avalon_dma_start_write_xfer(struct avalon_dma *avalon_dma,
 				       struct avalon_dma_tx_descriptor *desc)
 {
-	struct lite_dma_desc_table *table = avalon_dma->lite_table_rd_cpu_virt_addr;
+	struct dma_desc_table *table = avalon_dma->table_rd_cpu_virt_addr;
 	int nr_descs;
 	int last_id;
 
@@ -497,14 +497,14 @@ static int avalon_dma_start_write_xfer(struct avalon_dma *avalon_dma,
 
 	memset(&table->flags, 0, sizeof(table->flags));
 
-	nr_descs = setup_dma_descs(table->descriptors, desc);
+	nr_descs = setup_dma_descs(table->descs, desc);
 	if (WARN_ON(nr_descs < 1))
 		return nr_descs;
 
 	last_id = nr_descs - 1;
 	avalon_dma->h2d_last_id = last_id;
 
-	start_read_xfer(avalon_dma->regs, avalon_dma->lite_table_rd_bus_addr, last_id);
+	start_read_xfer(avalon_dma->regs, avalon_dma->table_rd_bus_addr, last_id);
 
 	return 0;
 }

@@ -17,24 +17,24 @@
 
 #include "avalon-dma-util.h"
 
-void setup_desc(struct dma_descriptor *desc, u32 desc_id,
-		u64 destination, u64 source, u32 size)
+void setup_desc(struct dma_desc *desc, u32 desc_id,
+		u64 dst, u64 src, u32 size)
 {
 	BUG_ON(!size);
 	WARN_ON(!IS_ALIGNED(size, sizeof(u32)));
-	BUG_ON(desc_id > (DMA_DESCRIPTOR_MAX - 1));
+	BUG_ON(desc_id > (DMA_DESC_MAX - 1));
 
-	desc->src_addr_ldw = cpu_to_le32(source & 0xffffffffUL);
-	desc->src_addr_udw = cpu_to_le32((source >> 32));
-	desc->dest_addr_ldw = cpu_to_le32(destination & 0xffffffffUL);
-	desc->dest_addr_udw = cpu_to_le32((destination >> 32));
+	desc->src_lo = cpu_to_le32(src & 0xfffffffful);
+	desc->src_hi = cpu_to_le32((src >> 32));
+	desc->dst_lo = cpu_to_le32(dst & 0xfffffffful);
+	desc->dst_hi = cpu_to_le32((dst >> 32));
 	desc->ctl_dma_len = cpu_to_le32((size >> 2) | (desc_id << 18));
 	desc->reserved[0] = cpu_to_le32(0x0);
 	desc->reserved[1] = cpu_to_le32(0x0);
 	desc->reserved[2] = cpu_to_le32(0x0);
 }
 
-int setup_descs(struct dma_descriptor *descs, unsigned int desc_id,
+int setup_descs(struct dma_desc *descs, unsigned int desc_id,
 		enum dma_data_direction direction,
 		dma_addr_t dev_addr, dma_addr_t host_addr, unsigned int len,
 		unsigned int *_set)
@@ -55,7 +55,7 @@ int setup_descs(struct dma_descriptor *descs, unsigned int desc_id,
 		return -EINVAL;
 	}
 
-	if (unlikely(desc_id > DMA_DESCRIPTOR_MAX - 1)) {
+	if (unlikely(desc_id > DMA_DESC_MAX - 1)) {
 		BUG();
 		return -EINVAL;
 	}
@@ -64,18 +64,18 @@ int setup_descs(struct dma_descriptor *descs, unsigned int desc_id,
 		return -EINVAL;
 
 	while (len) {
-		unsigned int xfer_len = min_t(unsigned int, len, AVALON_MM_DMA_MAX_TANSFER_SIZE);
+		unsigned int xfer_len = min_t(unsigned int, len, AVALON_DMA_MAX_TANSFER_SIZE);
 
 		setup_desc(descs, desc_id, dest, src, xfer_len);
 
 		set += xfer_len;
 
 		nr_descs++;
-		if (nr_descs >= DMA_DESCRIPTOR_MAX)
+		if (nr_descs >= DMA_DESC_MAX)
 			break;
 
 		desc_id++;
-		if (desc_id >= DMA_DESCRIPTOR_MAX)
+		if (desc_id >= DMA_DESC_MAX)
 			break;
 
 		descs++;
@@ -91,7 +91,7 @@ int setup_descs(struct dma_descriptor *descs, unsigned int desc_id,
 	return nr_descs;
 }
 
-int setup_descs_sg(struct dma_descriptor *descs, unsigned int desc_id,
+int setup_descs_sg(struct dma_desc *descs, unsigned int desc_id,
 		   enum dma_data_direction direction,
 		   dma_addr_t dev_addr, struct sg_table* sg_table,
 		   struct scatterlist *sg_start, unsigned int sg_offset,
@@ -165,8 +165,8 @@ int setup_descs_sg(struct dma_descriptor *descs, unsigned int desc_id,
 		if (ret < 0)
 			return ret;
 
-		if (unlikely((desc_id + ret > DMA_DESCRIPTOR_MAX) ||
-			     (nr_descs + ret > DMA_DESCRIPTOR_MAX))) {
+		if (unlikely((desc_id + ret > DMA_DESC_MAX) ||
+			     (nr_descs + ret > DMA_DESC_MAX))) {
 			BUG();
 			return -ENOMEM;
 		}
@@ -174,7 +174,7 @@ int setup_descs_sg(struct dma_descriptor *descs, unsigned int desc_id,
 		nr_descs += ret;
 		desc_id += ret;
 
-		if (desc_id >= DMA_DESCRIPTOR_MAX)
+		if (desc_id >= DMA_DESC_MAX)
 			break;
 
 		if (unlikely(sg_len != sg_set)) {

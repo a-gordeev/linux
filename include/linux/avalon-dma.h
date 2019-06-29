@@ -36,11 +36,11 @@ struct avalon_dma {
 	struct list_head desc_issued;
 	struct list_head desc_completed;
 
-	struct lite_dma_desc_table *lite_table_rd_cpu_virt_addr;
-	struct lite_dma_desc_table *lite_table_wr_cpu_virt_addr;
+	struct dma_desc_table *table_rd_cpu_virt_addr;
+	struct dma_desc_table *table_wr_cpu_virt_addr;
 
-	dma_addr_t lite_table_rd_bus_addr; 
-	dma_addr_t lite_table_wr_bus_addr;
+	dma_addr_t table_rd_bus_addr; 
+	dma_addr_t table_wr_bus_addr;
 
 	int h2d_last_id;
 	int d2h_last_id;
