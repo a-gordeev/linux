@@ -173,6 +173,12 @@ int avalon_dma_init(struct avalon_dma *avalon_dma,
 req_irq_err:
 	tasklet_kill(&avalon_dma->tasklet);
 
+	dma_free_coherent(
+		dev,
+		sizeof(struct dma_desc_table),
+		avalon_dma->table_wr_cpu_virt_addr,
+		avalon_dma->table_wr_bus_addr);
+
 alloc_wr_dma_table_err:
 	dma_free_coherent(
 		dev,
