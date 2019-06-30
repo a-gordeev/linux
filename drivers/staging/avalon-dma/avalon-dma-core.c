@@ -140,22 +140,22 @@ int avalon_dma_init(struct avalon_dma *avalon_dma,
 	if (ret)
 		goto alloc_descs_err;
 
-	avalon_dma->table_rd_cpu_virt_addr = dma_alloc_coherent(
+	avalon_dma->dma_desc_table_rd.cpu_addr = dma_alloc_coherent(
 		dev,
 		sizeof(struct dma_desc_table),
-		&avalon_dma->table_rd_bus_addr,
+		&avalon_dma->dma_desc_table_rd.dma_addr,
 		GFP_KERNEL);
-	if (!avalon_dma->table_rd_cpu_virt_addr) {
+	if (!avalon_dma->dma_desc_table_rd.cpu_addr) {
 		ret = -ENOMEM;
 		goto alloc_rd_dma_table_err;
 	}
 
-	avalon_dma->table_wr_cpu_virt_addr = dma_alloc_coherent(
+	avalon_dma->dma_desc_table_wr.cpu_addr = dma_alloc_coherent(
 		dev,
 		sizeof(struct dma_desc_table),
-		&avalon_dma->table_wr_bus_addr,
+		&avalon_dma->dma_desc_table_wr.dma_addr,
 		GFP_KERNEL);
-	if (!avalon_dma->table_wr_cpu_virt_addr) {
+	if (!avalon_dma->dma_desc_table_wr.cpu_addr) {
 		ret = -ENOMEM;
 		goto alloc_wr_dma_table_err;
 	}
@@ -176,15 +176,15 @@ req_irq_err:
 	dma_free_coherent(
 		dev,
 		sizeof(struct dma_desc_table),
-		avalon_dma->table_wr_cpu_virt_addr,
-		avalon_dma->table_wr_bus_addr);
+		avalon_dma->dma_desc_table_wr.cpu_addr,
+		avalon_dma->dma_desc_table_wr.dma_addr);
 
 alloc_wr_dma_table_err:
 	dma_free_coherent(
 		dev,
 		sizeof(struct dma_desc_table),
-		avalon_dma->table_rd_cpu_virt_addr,
-		avalon_dma->table_rd_bus_addr);
+		avalon_dma->dma_desc_table_rd.cpu_addr,
+		avalon_dma->dma_desc_table_rd.dma_addr);
 
 alloc_rd_dma_table_err:
 	free_descs(&avalon_dma->desc_allocated);
@@ -248,14 +248,14 @@ void avalon_dma_term(struct avalon_dma *avalon_dma)
 	dma_free_coherent(
 		dev,
 		sizeof(struct dma_desc_table),
-		avalon_dma->table_rd_cpu_virt_addr,
-		avalon_dma->table_rd_bus_addr);
+		avalon_dma->dma_desc_table_rd.cpu_addr,
+		avalon_dma->dma_desc_table_rd.dma_addr);
 
 	dma_free_coherent(
 		dev,
 		sizeof(struct dma_desc_table),
-		avalon_dma->table_wr_cpu_virt_addr,
-		avalon_dma->table_wr_bus_addr);
+		avalon_dma->dma_desc_table_wr.cpu_addr,
+		avalon_dma->dma_desc_table_wr.dma_addr);
 
 	free_descs(&avalon_dma->desc_allocated);
 
@@ -468,7 +468,7 @@ static int setup_dma_descs(struct dma_desc *dma_descs,
 static int avalon_dma_start_read_xfer(struct avalon_dma *avalon_dma,
 				      struct avalon_dma_tx_descriptor *desc)
 {
-	struct dma_desc_table *table = avalon_dma->table_wr_cpu_virt_addr;
+	struct dma_desc_table *table = avalon_dma->dma_desc_table_wr.cpu_addr;
 	int nr_descs;
 	int last_id;
 
@@ -485,7 +485,7 @@ static int avalon_dma_start_read_xfer(struct avalon_dma *avalon_dma,
 	last_id = nr_descs - 1;
 	avalon_dma->d2h_last_id = last_id;
 
-	start_write_xfer(avalon_dma->regs, avalon_dma->table_wr_bus_addr, last_id);
+	start_write_xfer(avalon_dma->regs, avalon_dma->dma_desc_table_wr.dma_addr, last_id);
 
 	return 0;
 }
@@ -493,7 +493,7 @@ static int avalon_dma_start_read_xfer(struct avalon_dma *avalon_dma,
 static int avalon_dma_start_write_xfer(struct avalon_dma *avalon_dma,
 				       struct avalon_dma_tx_descriptor *desc)
 {
-	struct dma_desc_table *table = avalon_dma->table_rd_cpu_virt_addr;
+	struct dma_desc_table *table = avalon_dma->dma_desc_table_rd.cpu_addr;
 	int nr_descs;
 	int last_id;
 
@@ -510,7 +510,7 @@ static int avalon_dma_start_write_xfer(struct avalon_dma *avalon_dma,
 	last_id = nr_descs - 1;
 	avalon_dma->h2d_last_id = last_id;
 
-	start_read_xfer(avalon_dma->regs, avalon_dma->table_rd_bus_addr, last_id);
+	start_read_xfer(avalon_dma->regs, avalon_dma->dma_desc_table_rd.dma_addr, last_id);
 
 	return 0;
 }

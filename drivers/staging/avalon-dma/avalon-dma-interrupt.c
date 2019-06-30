@@ -45,8 +45,8 @@ irqreturn_t avalon_dma_interrupt(int irq, void *dev_id)
 {
 	struct avalon_dma *avalon_dma = (struct avalon_dma*)dev_id;
 	struct avalon_dma_tx_descriptor *desc;
-	u32 *rd_flags = avalon_dma->table_rd_cpu_virt_addr->flags;
-	u32 *wr_flags = avalon_dma->table_wr_cpu_virt_addr->flags;
+	u32 *rd_flags = avalon_dma->dma_desc_table_rd.cpu_addr->flags;
+	u32 *wr_flags = avalon_dma->dma_desc_table_wr.cpu_addr->flags;
 	bool rd_done;
 	bool wr_done;
 	bool desc_done;
