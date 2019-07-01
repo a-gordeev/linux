@@ -119,9 +119,11 @@ int avalon_dma_init(struct avalon_dma *avalon_dma,
 
 	spin_lock_init(&avalon_dma->lock);
 
-	avalon_dma->dev = dev;
-	avalon_dma->regs = regs;
-	avalon_dma->active_desc = NULL;
+	avalon_dma->dev		= dev;
+	avalon_dma->regs	= regs;
+	avalon_dma->irq		= irq;
+
+	avalon_dma->active_desc	= NULL;
 
 	avalon_dma->h2d_last_id = -1;
 	avalon_dma->d2h_last_id = -1;
