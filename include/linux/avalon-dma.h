@@ -36,7 +36,7 @@ struct avalon_dma {
 	struct list_head desc_issued;
 	struct list_head desc_completed;
 
-	struct {
+	struct __dma_desc_table {
 		struct dma_desc_table *cpu_addr;
 		dma_addr_t dma_addr;
 	} dma_desc_table_rd, dma_desc_table_wr;

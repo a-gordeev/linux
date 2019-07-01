@@ -53,40 +53,39 @@ struct dma_desc_table {
 	struct dma_desc descs[AVALON_DMA_DESC_NUM];
 } __attribute__ ((packed));
 
-static inline
-u32 __av_rd(void __iomem *addr, size_t ctrl_off, size_t reg_off)
+static inline u32 __av_read32(void __iomem *base,
+			      size_t ctrl_off,
+			      size_t reg_off)
 {
 	size_t offset = AVALON_DMA_CTRL_BASE + ctrl_off + reg_off;
-	u32 ret = ioread32(addr + offset);
+	u32 ret = ioread32(base + offset);
 
 #ifdef AVALON_DEBUG_HW_REGS
 	pr_warn("%s(%d): ioread32(%p, %lx) = %x", __FUNCTION__, __LINE__,
-		addr, ctrl_off + reg_off, ret);
+		base, ctrl_off + reg_off, ret);
 #endif
 
 	return ret;
 }
 
-static inline
-void __av_wr(u32 value, void __iomem *addr, size_t ctrl_off, size_t reg_off)
+static inline void __av_write32(u32 value,
+				void __iomem *base,
+				size_t ctrl_off,
+				size_t reg_off)
 {
 	size_t offset = AVALON_DMA_CTRL_BASE + ctrl_off + reg_off;
 
 #ifdef AVALON_DEBUG_HW_REGS
 	pr_warn("%s(%d): iowrite32(%p, %lx, %x)", __FUNCTION__, __LINE__,
-		addr, ctrl_off + reg_off, value);
+		base, ctrl_off + reg_off, value);
 #endif
 
-	iowrite32(value, addr + offset);
+	iowrite32(value, base + offset);
 }
 
-#define av_rd_ctrl_read32(a, r) \
-	__av_rd(a, AVALON_DMA_RD_CTRL_OFFSET, offsetof(struct dma_ctrl, r))
-#define av_rd_ctrl_write32(v, a, r) \
-	__av_wr(v, a, AVALON_DMA_RD_CTRL_OFFSET, offsetof(struct dma_ctrl, r))
-#define av_wr_ctrl_read32(a, r) \
-	__av_rd(a, AVALON_DMA_WR_CTRL_OFFSET, offsetof(struct dma_ctrl, r))
-#define av_wr_ctrl_write32(v, a, r) \
-	__av_wr(v, a, AVALON_DMA_WR_CTRL_OFFSET, offsetof(struct dma_ctrl, r))
+#define av_read32(b, o, r) \
+	__av_read32(b, o, offsetof(struct dma_ctrl, r))
+#define av_write32(v, b, o, r) \
+	__av_write32(v, b, o, offsetof(struct dma_ctrl, r))
 
 #endif

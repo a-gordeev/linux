@@ -265,26 +265,6 @@ void avalon_dma_term(struct avalon_dma *avalon_dma)
 }
 EXPORT_SYMBOL_GPL(avalon_dma_term);
 
-static void start_write_xfer(void __iomem *av, dma_addr_t table, int last_id)
-{
-	av_wr_ctrl_write32(table >> 32, av, rc_src_hi);
-	av_wr_ctrl_write32(table, av, rc_src_lo);
-	av_wr_ctrl_write32(AVALON_DMA_WR_EP_DST_HI, av, ep_dst_hi);
-	av_wr_ctrl_write32(AVALON_DMA_WR_EP_DST_LO, av, ep_dst_lo);
-	av_wr_ctrl_write32(last_id, av, table_size);
-	av_wr_ctrl_write32(last_id, av, last_ptr);
-}
-
-static void start_read_xfer(void __iomem *av, dma_addr_t table, int last_id)
-{
-	av_rd_ctrl_write32(table >> 32, av, rc_src_hi);
-	av_rd_ctrl_write32(table, av, rc_src_lo);
-	av_rd_ctrl_write32(AVALON_DMA_RD_EP_DST_HI, av, ep_dst_hi);
-	av_rd_ctrl_write32(AVALON_DMA_RD_EP_DST_LO, av, ep_dst_lo);
-	av_rd_ctrl_write32(last_id, av, table_size);
-	av_rd_ctrl_write32(last_id, av, last_ptr);
-}
-
 static int submit_xfer(struct avalon_dma *avalon_dma,
 		       enum avalon_dma_xfer_desc_type type,
 		       enum dma_data_direction direction,
@@ -467,67 +447,71 @@ static int setup_dma_descs(struct dma_desc *dma_descs,
 	return ret;
 }
 
-static int avalon_dma_start_read_xfer(struct avalon_dma *avalon_dma,
-				      struct avalon_dma_tx_descriptor *desc)
+static void start_xfer(void __iomem *base, size_t ctrl_off,
+		       u32 rc_src_hi, u32 rc_src_lo,
+		       u32 ep_dst_hi, u32 ep_dst_lo,
+		       int last_id)
 {
-	struct dma_desc_table *table = avalon_dma->dma_desc_table_wr.cpu_addr;
-	int nr_descs;
-	int last_id;
-
-	/*
-	 * iowrite32(1, bar0 + DESC_CTRLLER_BASE + ALTERA_LITE_DMA_WR_CONTROL);
-	 */
-
-	memset(&table->flags, 0, sizeof(table->flags));
-
-	nr_descs = setup_dma_descs(table->descs, desc);
-	if (WARN_ON(nr_descs < 1))
-		return nr_descs;
-
-	last_id = nr_descs - 1;
-	avalon_dma->d2h_last_id = last_id;
-
-	start_write_xfer(avalon_dma->regs, avalon_dma->dma_desc_table_wr.dma_addr, last_id);
-
-	return 0;
-}
-
-static int avalon_dma_start_write_xfer(struct avalon_dma *avalon_dma,
-				       struct avalon_dma_tx_descriptor *desc)
-{
-	struct dma_desc_table *table = avalon_dma->dma_desc_table_rd.cpu_addr;
-	int nr_descs;
-	int last_id;
-
-	/*
-	 * iowrite32(1, bar0 + DESC_CTRLLER_BASE + ALTERA_LITE_DMA_RD_CONTROL);
-	 */
-
-	memset(&table->flags, 0, sizeof(table->flags));
-
-	nr_descs = setup_dma_descs(table->descs, desc);
-	if (WARN_ON(nr_descs < 1))
-		return nr_descs;
-
-	last_id = nr_descs - 1;
-	avalon_dma->h2d_last_id = last_id;
-
-	start_read_xfer(avalon_dma->regs, avalon_dma->dma_desc_table_rd.dma_addr, last_id);
-
-	return 0;
+	av_write32(rc_src_hi, base, ctrl_off, rc_src_hi);
+	av_write32(rc_src_lo, base, ctrl_off, rc_src_lo);
+	av_write32(ep_dst_hi, base, ctrl_off, ep_dst_hi);
+	av_write32(ep_dst_lo, base, ctrl_off, ep_dst_lo);
+	av_write32(last_id, base, ctrl_off, table_size);
+	av_write32(last_id, base, ctrl_off, last_ptr);
 }
 
 int avalon_dma_start_xfer(struct avalon_dma *avalon_dma,
 			  struct avalon_dma_tx_descriptor *desc)
 {
-	if (desc->direction == DMA_TO_DEVICE)
-		return avalon_dma_start_write_xfer(avalon_dma, desc);
-	else if (desc->direction == DMA_FROM_DEVICE)
-		return avalon_dma_start_read_xfer(avalon_dma, desc);
-	else
-		BUG();
+	size_t ctrl_off;
+	struct __dma_desc_table *__table;
+	struct dma_desc_table *table;
+	u32 rc_src_hi, rc_src_lo;
+	u32 ep_dst_lo, ep_dst_hi;
+	int last_id, *__last_id;
+	int nr_descs;
 
-	return -EINVAL;
+	if (desc->direction == DMA_TO_DEVICE) {
+		__table = &avalon_dma->dma_desc_table_rd;
+
+		ctrl_off = AVALON_DMA_RD_CTRL_OFFSET;
+
+		ep_dst_hi = AVALON_DMA_RD_EP_DST_HI;
+		ep_dst_lo = AVALON_DMA_RD_EP_DST_LO;
+
+		__last_id = &avalon_dma->h2d_last_id;
+	} else if (desc->direction == DMA_FROM_DEVICE) {
+		__table = &avalon_dma->dma_desc_table_wr;
+
+		ctrl_off = AVALON_DMA_WR_CTRL_OFFSET;
+
+		ep_dst_hi = AVALON_DMA_WR_EP_DST_HI;
+		ep_dst_lo = AVALON_DMA_WR_EP_DST_LO;
+
+		__last_id = &avalon_dma->d2h_last_id;
+	} else {
+		BUG();
+	}
+
+	table = __table->cpu_addr;
+	memset(&table->flags, 0, sizeof(table->flags));
+
+	nr_descs = setup_dma_descs(table->descs, desc);
+	if (WARN_ON(nr_descs < 1))
+		return nr_descs;
+
+	last_id = nr_descs - 1;
+	*__last_id = last_id;
+
+	rc_src_hi = __table->dma_addr >> 32;
+	rc_src_lo = (u32)__table->dma_addr;
+
+	start_xfer(avalon_dma->regs, ctrl_off,
+		   rc_src_hi, rc_src_lo,
+		   ep_dst_hi, ep_dst_lo,
+		   last_id);
+
+	return 0;
 }
 
 MODULE_AUTHOR("Alexander Gordeev <alexander.gordeev@daqri.com>");
