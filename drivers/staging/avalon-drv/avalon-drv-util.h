@@ -30,4 +30,6 @@ struct dma_sg_buf *dma_sg_buf_alloc(struct device *dev,
 				    gfp_t gfp_flags);
 void dma_sg_buf_free(struct dma_sg_buf *buf);
 
+void dump_mem(struct device *dev, void *data, size_t len);
+
 #endif

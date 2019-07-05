@@ -15,6 +15,7 @@
 #include <linux/pci.h>
 
 #include "avalon-drv.h"
+#include "avalon-drv-util.h"
 #include "avalon-drv-fops.h"
 #include "avalon-drv-attr.h"
 
@@ -78,6 +79,7 @@ static void avalon_dev_unregister(struct avalon_dev *avalon_dev)
 static int __init avalon_pci_probe(struct pci_dev *pci_dev,
 				   const struct pci_device_id *id)
 {
+	struct device *dev = &pci_dev->dev;
 	struct avalon_dev *avalon_dev;
 	void __iomem *regs;
 	int ret;
@@ -104,8 +106,7 @@ static int __init avalon_pci_probe(struct pci_dev *pci_dev,
 	if (ret < 0)
 		goto int_err;
 
-	ret = avalon_dma_init(&avalon_dev->avalon_dma,
-			      &pci_dev->dev, regs, ret);
+	ret = avalon_dma_init(&avalon_dev->avalon_dma, dev, regs, ret);
 	if (ret)
 		goto dma_err;
 

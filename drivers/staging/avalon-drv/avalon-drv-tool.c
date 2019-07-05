@@ -2,28 +2,76 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <errno.h>
+#include <string.h>
+#include <math.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/uio.h>
+#include <sys/mman.h>
 
 #include <uapi/linux/avalon-drv-ioctl.h>
+
+#define AVALON_DMA_FIXUP_SIZE		0x100
+#define AVALON_DMA_MAX_TANSFER_SIZE	(0x100000 - AVALON_DMA_FIXUP_SIZE)
+
+#define TARGET_MEM_SIZE			(0x80000000 - 0x70000000)
+#define DMA_SIZE			(2 * AVALON_DMA_MAX_TANSFER_SIZE)
+#define DMA_SIZE_SG			(TARGET_MEM_SIZE)
 
 #define DEV_NAME	"/dev/avalon-drv"
 #define DMA_IN		"./dma.in"
 #define DMA_OUT		"./dma.out"
 
+static int print_mem(char *buf, size_t buf_len,
+		     const void *mem, size_t mem_len)
+{
+	int ret, i, total = 0;
+
+	if (buf_len < 3)
+		return -EINVAL;
+
+	if (mem_len > buf_len / 3)
+		mem_len = buf_len / 3;
+
+	for (i = 0; i < mem_len; i++) {
+		ret = snprintf(buf + total, buf_len - total,
+			 "%02X ", ((const unsigned char*)mem)[i]);
+		if (ret < 0) {
+			strcpy(buf, "--");
+			return ret;
+		}
+		total += ret;
+	}
+
+	buf[total] = 0;
+
+	return total;
+}
+
+void dump_mem(void *data, size_t len)
+{
+	char buf[64];
+	int n;
+
+	n = snprintf(buf, sizeof(buf), "%p [ ", data);
+
+	print_mem(buf + n, sizeof(buf) - n, data, len);
+
+	printf("%s]\n", buf);
+}
+
 int main(int argc, char **argv)
 {
 	int dev, fd_rd, fd_wr;
-	void *buf, *buf_rd, *buf_wr;
-	size_t len, len_rd, len_wr;
+	void *buf_rd = NULL, *buf_wr = NULL;
+	size_t len_rd = 0, len_wr = 0;
+	off_t off_rd = 0, off_wr = 0;
 	struct iovec iovec[2];
 	struct stat stat;
 	int cmd = 0;
 	char opt;
-
-	const size_t xfer_len = (0x80000000 - 0x70000000) / 2;
 
 	while ((opt = getopt(argc, argv, "rwsRWSHD")) != -1) {
 		switch (opt) {
@@ -56,41 +104,70 @@ int main(int argc, char **argv)
 		}
 	}
 
-	len = len_rd = len_wr = xfer_len;
+	dev = open(DEV_NAME, O_RDWR);
+	if (dev < 0) {
+		fprintf(stderr, "open %s failed\n", DEV_NAME);
+		return -1;
+	}
 
 	switch (cmd) {
 	case IOCTL_AVALON_DMA_READ:
 	case IOCTL_AVALON_DMA_WRITE:
+	case IOCTL_AVALON_DMA_RDWR:
+		len_rd = DMA_SIZE;
+		len_wr = DMA_SIZE;
+		break;
+
 	case IOCTL_AVALON_DMA_READ_SG:
-	case IOCTL_AVALON_DMA_WRITE_SG:
 	case IOCTL_AVALON_DMA_READ_SG_SMP:
+	case IOCTL_AVALON_DMA_WRITE_SG:
 	case IOCTL_AVALON_DMA_WRITE_SG_SMP:
-		buf = buf_rd = buf_wr = malloc(len);
-		if (!buf) {
-			fprintf(stderr, "malloc(%ld) failed\n", len);
+		len_rd = DMA_SIZE_SG;
+		len_wr = DMA_SIZE_SG;
+		break;
+
+	case IOCTL_AVALON_DMA_RDWR_SG:
+		len_rd = DMA_SIZE_SG / 2;
+		len_wr = DMA_SIZE_SG / 2;
+		off_rd = 0;
+		off_wr = len_rd;
+		break;
+	}
+
+	memset(iovec, 0, sizeof(iovec));
+
+	switch (cmd) {
+	case IOCTL_AVALON_DMA_READ:
+		buf_rd = malloc(len_rd);
+		if (!buf_rd) {
+malloc_err:
+			fprintf(stderr, "malloc() failed %d\n", errno);
 			return -1;
 		}
 
-		iovec[0].iov_base = buf;
-		iovec[0].iov_len = len;
+		iovec[0].iov_base = buf_rd;
+		iovec[0].iov_len = len_rd;
 
-		printf("buf %p, len %ld\n", buf, len);
+		break;
+
+	case IOCTL_AVALON_DMA_WRITE:
+		buf_wr = malloc(len_wr);
+		if (!buf_wr)
+			goto malloc_err;
+
+		iovec[0].iov_base = buf_wr;
+		iovec[0].iov_len = len_wr;
 
 		break;
 
 	case IOCTL_AVALON_DMA_RDWR:
-	case IOCTL_AVALON_DMA_RDWR_SG:
 		buf_rd = malloc(len_rd);
-		if (!buf_rd) {
-			fprintf(stderr, "malloc(%ld) failed\n", len_rd);
-			return -1;
-		}
+		if (!buf_rd)
+			goto malloc_err;
 
 		buf_wr = malloc(len_wr);
-		if (!buf_wr) {
-			fprintf(stderr, "malloc(%ld) failed\n", len_wr);
-			return -1;
-		}
+		if (!buf_wr)
+			goto malloc_err;
 
 		iovec[0].iov_base = buf_rd;
 		iovec[0].iov_len = len_rd;
@@ -98,11 +175,54 @@ int main(int argc, char **argv)
 		iovec[1].iov_base = buf_wr;
 		iovec[1].iov_len = len_wr;
 
-		printf("buf_rd %p, len_rd %ld; buf_wr %p, len_wr %ld\n",
-			buf_rd, len_rd, buf_wr, len_wr);
+		break;
+
+	case IOCTL_AVALON_DMA_READ_SG:
+	case IOCTL_AVALON_DMA_READ_SG_SMP:
+		buf_rd = mmap(NULL, len_rd, PROT_READ, MAP_SHARED, dev, off_rd);
+		if (buf_rd == MAP_FAILED) {
+mmap_err:
+			fprintf(stderr, "mmap %s failed %d\n", DEV_NAME, errno);
+			return -1;
+		}
+
+		iovec[0].iov_base = buf_rd;
+		iovec[0].iov_len = len_rd;
+
+		break;
+
+	case IOCTL_AVALON_DMA_WRITE_SG:
+	case IOCTL_AVALON_DMA_WRITE_SG_SMP:
+		buf_wr = mmap(NULL, len_wr, PROT_WRITE, MAP_SHARED, dev, off_wr);
+		if (buf_wr == MAP_FAILED)
+			goto mmap_err;
+
+		iovec[0].iov_base = buf_wr;
+		iovec[0].iov_len = len_wr;
+
+		break;
+
+	case IOCTL_AVALON_DMA_RDWR_SG:
+		buf_rd = mmap(NULL, len_rd, PROT_READ, MAP_SHARED, dev, off_rd);
+		if (buf_rd == MAP_FAILED)
+			goto mmap_err;
+		
+		buf_wr = mmap(NULL, len_wr, PROT_WRITE, MAP_SHARED, dev, off_wr);
+		if (buf_wr == MAP_FAILED)
+			goto mmap_err;
+
+		iovec[0].iov_base = buf_rd;
+		iovec[0].iov_len = len_rd;
+
+		iovec[1].iov_base = buf_wr;
+		iovec[1].iov_len = len_wr;
 
 		break;
 	}
+
+	printf("\niov_base[0] %p iov_len[0] %lx\niov_base[1] %p iov_len[1] %lx\n",
+		iovec[0].iov_base, iovec[0].iov_len,
+		iovec[1].iov_base, iovec[1].iov_len);
 
 	switch (cmd) {
 	case IOCTL_AVALON_DMA_WRITE:
@@ -131,16 +251,20 @@ int main(int argc, char **argv)
 		close(fd_wr);
 	}
 
-	dev = open(DEV_NAME, O_RDWR);
-	if (dev < 0) {
-		fprintf(stderr, "open %s failed\n", DEV_NAME);
-		return -1;
-	}
+	if (buf_rd)
+		dump_mem(buf_rd, len_rd);
+	if (buf_wr)
+		dump_mem(buf_wr, len_wr);
 
 	if (ioctl(dev, cmd, iovec) < 0) {
 		fprintf(stderr, "ioctl %x failed\n", cmd);
 		return -1;
 	}
+
+	if (buf_rd)
+		dump_mem(buf_rd, len_wr);
+	if (buf_wr)
+		dump_mem(buf_wr, len_wr);
 
 	close(dev);
 
