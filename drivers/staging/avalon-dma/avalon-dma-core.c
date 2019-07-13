@@ -348,7 +348,8 @@ EXPORT_SYMBOL_GPL(avalon_dma_issue_pending);
 
 int avalon_dma_submit_xfer(struct avalon_dma *avalon_dma,
 			   enum dma_data_direction direction,
-			   dma_addr_t dev_addr, dma_addr_t host_addr,
+			   dma_addr_t dev_addr,
+			   dma_addr_t host_addr,
 			   unsigned int size,
 			   avalon_dma_xfer_callback callback,
 			   void *callback_param)
@@ -366,10 +367,11 @@ int avalon_dma_submit_xfer(struct avalon_dma *avalon_dma,
 EXPORT_SYMBOL_GPL(avalon_dma_submit_xfer);
 
 int avalon_dma_submit_xfer_sg(struct avalon_dma *avalon_dma,
-			     enum dma_data_direction direction,
-			     dma_addr_t dev_addr, struct sg_table *sg_table,
-			     avalon_dma_xfer_callback callback,
-			     void *callback_param)
+			      enum dma_data_direction direction,
+			      dma_addr_t dev_addr,
+			      struct sg_table *sg_table,
+			      avalon_dma_xfer_callback callback,
+			      void *callback_param)
 {
 	union avalon_dma_xfer_info xi;
 
