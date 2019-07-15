@@ -17,5 +17,4 @@ avalon-drv-objs :=	avalon-drv-dev.o \
 			avalon-drv-mmap.o \
 			avalon-drv-sg-buf.o \
 			avalon-drv-xfer.o \
-			avalon-drv-util.o \
-			avalon-drv-attr.o
+			avalon-drv-util.o

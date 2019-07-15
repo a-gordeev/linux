@@ -17,7 +17,6 @@
 #include "avalon-drv.h"
 #include "avalon-drv-ioctl.h"
 #include "avalon-drv-mmap.h"
-#include "avalon-drv-attr.h"
 
 #define PCI_VENDOR_ID_ALARIC	0x1172
 
@@ -120,10 +119,6 @@ static int __init avalon_pci_probe(struct pci_dev *pci_dev,
 	if (ret)
 		goto dev_reg_err;
 
-	ret = init_attributes(&pci_dev->dev);
-	if (ret)
-		goto attr_err;
-
 	pci_set_master(pci_dev);
 	pci_write_config_byte(pci_dev, PCI_INTERRUPT_LINE, pci_dev->irq);
 
@@ -132,7 +127,6 @@ static int __init avalon_pci_probe(struct pci_dev *pci_dev,
 
 	return 0;
 
-attr_err:
 	avalon_dev_unregister(avalon_dev);
 
 dev_reg_err:
@@ -162,7 +156,6 @@ static void __exit avalon_pci_remove(struct pci_dev *pci_dev)
 
 	pci_set_drvdata(pci_dev, NULL);
 
-	term_attributes(&pci_dev->dev);
 	avalon_dev_unregister(avalon_dev);
 
 	avalon_dma_term(&avalon_dev->avalon_dma);
