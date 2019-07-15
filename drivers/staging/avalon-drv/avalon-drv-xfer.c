@@ -545,16 +545,15 @@ int xfer_rw_sg(struct avalon_dma *avalon_dma,
 		dump_mem(dev, sg_buf->vaddr, 16);
 
 	dma_sync_sg_for_device(dev,
-			       sg_buf->dma_sgt->sgl, sg_buf->dma_sgt->nents,
+			       sg_buf->sgt.sgl, sg_buf->sgt.nents,
 			       sg_buf->dma_dir);
 
-	ret = xfer(avalon_dma,
-		   dir, dma_addr, sg_buf->dma_sgt, xfer_callback);
+	ret = xfer(avalon_dma, dir, dma_addr, &sg_buf->sgt, xfer_callback);
 	if (ret)
 		goto xfer_err;
 
 	dma_sync_sg_for_cpu(dev,
-			    sg_buf->dma_sgt->sgl, sg_buf->dma_sgt->nents,
+			    sg_buf->sgt.sgl, sg_buf->sgt.nents,
 			    sg_buf->dma_dir);
 
 	if (dir == DMA_FROM_DEVICE)
@@ -603,19 +602,19 @@ int xfer_simultaneous_sg(struct avalon_dma *avalon_dma,
 	init_callback_info(&info, dev, 2 * nr_reps);
 
 	dma_sync_sg_for_device(dev,
-			       sg_buf_rd->dma_sgt->sgl,
-			       sg_buf_rd->dma_sgt->nents,
+			       sg_buf_rd->sgt.sgl,
+			       sg_buf_rd->sgt.nents,
 			       DMA_FROM_DEVICE);
 	dma_sync_sg_for_device(dev,
-			       sg_buf_wr->dma_sgt->sgl,
-			       sg_buf_wr->dma_sgt->nents,
+			       sg_buf_wr->sgt.sgl,
+			       sg_buf_wr->sgt.nents,
 			       DMA_TO_DEVICE);
 
 	for (i = 0; i < nr_reps; i++) {
 		ret = avalon_dma_submit_xfer_sg(avalon_dma,
 						DMA_TO_DEVICE,
 						dma_addr_wr,
-						sg_buf_wr->dma_sgt,
+						&sg_buf_wr->sgt,
 						wr_xfer_callback, &info);
 		if (ret)
 			goto dma_submit_rd_err;
@@ -623,7 +622,7 @@ int xfer_simultaneous_sg(struct avalon_dma *avalon_dma,
 		ret = avalon_dma_submit_xfer_sg(avalon_dma,
 						DMA_FROM_DEVICE,
 						dma_addr_rd,
-						sg_buf_rd->dma_sgt,
+						&sg_buf_rd->sgt,
 						rd_xfer_callback, &info);
 		if (ret)
 			goto dma_submit_wr_err;
@@ -638,12 +637,12 @@ int xfer_simultaneous_sg(struct avalon_dma *avalon_dma,
 		goto wait_err;
 
 	dma_sync_sg_for_cpu(dev,
-			    sg_buf_rd->dma_sgt->sgl,
-			    sg_buf_rd->dma_sgt->nents,
+			    sg_buf_rd->sgt.sgl,
+			    sg_buf_rd->sgt.nents,
 			    DMA_FROM_DEVICE);
 	dma_sync_sg_for_cpu(dev,
-			    sg_buf_wr->dma_sgt->sgl,
-			    sg_buf_wr->dma_sgt->nents,
+			    sg_buf_wr->sgt.sgl,
+			    sg_buf_wr->sgt.nents,
 			    DMA_TO_DEVICE);
 
 wait_err:

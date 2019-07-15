@@ -73,7 +73,6 @@ struct dma_sg_buf *dma_sg_buf_alloc(struct device *dev,
 	buf->size = size;
 	/* size is already page aligned */
 	buf->num_pages = size >> PAGE_SHIFT;
-	buf->dma_sgt = &buf->sg_table;
 
 	buf->pages = kvmalloc_array(buf->num_pages, sizeof(struct page *),
 				    GFP_KERNEL | __GFP_ZERO);
@@ -84,14 +83,14 @@ struct dma_sg_buf *dma_sg_buf_alloc(struct device *dev,
 	if (ret)
 		goto fail_pages_alloc;
 
-	ret = sg_alloc_table_from_pages(buf->dma_sgt, buf->pages,
+	ret = sg_alloc_table_from_pages(&buf->sgt, buf->pages,
 			buf->num_pages, 0, size, GFP_KERNEL);
 	if (ret)
 		goto fail_table_alloc;
 
 	buf->dev = get_device(dev);
 
-	sgt = &buf->sg_table;
+	sgt = &buf->sgt;
 
 	sgt->nents = dma_map_sg_attrs(buf->dev, sgt->sgl, sgt->orig_nents,
 				      buf->dma_dir, DMA_ATTR_SKIP_CPU_SYNC);
@@ -109,7 +108,7 @@ fail_vm_map:
 			   buf->dma_dir, DMA_ATTR_SKIP_CPU_SYNC);
 fail_map:
 	put_device(buf->dev);
-	sg_free_table(buf->dma_sgt);
+	sg_free_table(&buf->sgt);
 fail_table_alloc:
 	num_pages = buf->num_pages;
 	while (num_pages--)
@@ -123,13 +122,13 @@ fail_pages_array_alloc:
 
 void dma_sg_buf_free(struct dma_sg_buf *buf)
 {
-	struct sg_table *sgt = &buf->sg_table;
+	struct sg_table *sgt = &buf->sgt;
 	int i = buf->num_pages;
 
 	dma_unmap_sg_attrs(buf->dev, sgt->sgl, sgt->orig_nents,
 			   buf->dma_dir, DMA_ATTR_SKIP_CPU_SYNC);
 	vm_unmap_ram(buf->vaddr, buf->num_pages);
-	sg_free_table(buf->dma_sgt);
+	sg_free_table(&buf->sgt);
 	while (--i >= 0)
 		__free_page(buf->pages[i]);
 	kvfree(buf->pages);

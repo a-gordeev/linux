@@ -18,8 +18,7 @@ struct dma_sg_buf {
 	void				*vaddr;
 	struct page			**pages;
 	enum dma_data_direction		dma_dir;
-	struct sg_table			sg_table;
-	struct sg_table			*dma_sgt;	/* redundant */
+	struct sg_table			sgt;
 	size_t				size;
 	unsigned int			num_pages;
 };
