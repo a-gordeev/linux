@@ -10,9 +10,9 @@
  * Public License. See the file COPYING in the main directory of the
  * Linux distribution for more details.
  */
-#ifndef __AVALON_DRV_UTIL_H__
-#define __AVALON_DRV_UTIL_H__
+#ifndef __AVALON_DRV_IOCTL_H__
+#define __AVALON_DRV_IOCTL_H__
 
-void dump_mem(struct device *dev, void *data, size_t len);
+long avalon_dev_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
 
 #endif

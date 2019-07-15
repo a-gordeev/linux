@@ -10,9 +10,9 @@
  * Public License. See the file COPYING in the main directory of the
  * Linux distribution for more details.
  */
-#ifndef __AVALON_DRV_FOPS_H__
-#define __AVALON_DRV_FOPS_H__
+#ifndef __AVALON_DRV_MMAP_H__
+#define __AVALON_DRV_MMAP_H__
 
-extern const struct file_operations avalon_dev_fops;
+int avalon_dev_mmap(struct file *file, struct vm_area_struct *vma);
 
 #endif

@@ -15,8 +15,8 @@
 #include <linux/pci.h>
 
 #include "avalon-drv.h"
-#include "avalon-drv-util.h"
-#include "avalon-drv-fops.h"
+#include "avalon-drv-ioctl.h"
+#include "avalon-drv-mmap.h"
 #include "avalon-drv-attr.h"
 
 #define PCI_VENDOR_ID_ALARIC	0x1172
@@ -25,6 +25,12 @@
 
 #define DMA_STATUS_INT		0
 #define AVALON_MSI_COUNT	4
+
+const struct file_operations avalon_dev_fops = {
+	.llseek		= generic_file_llseek,
+	.unlocked_ioctl	= avalon_dev_ioctl,
+	.mmap		= avalon_dev_mmap,
+};
 
 static int init_interrupts(struct pci_dev *pci_dev)
 {
