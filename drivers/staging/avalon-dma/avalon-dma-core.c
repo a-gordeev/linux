@@ -518,4 +518,4 @@ int avalon_dma_start_xfer(struct avalon_dma *avalon_dma,
 
 MODULE_AUTHOR("Alexander Gordeev <alexander.gordeev@daqri.com>");
 MODULE_DESCRIPTION("Avalon DMA engine driver");
-MODULE_LICENSE("Dual BSD/GPL");
+MODULE_LICENSE("GPL v2");

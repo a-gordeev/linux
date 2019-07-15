@@ -203,5 +203,5 @@ module_exit(avalon_drv_exit);
 MODULE_AUTHOR("Alexander Gordeev <alexander.gordeev@daqri.com>");
 MODULE_DESCRIPTION("Avalon DMA control driver");
 MODULE_VERSION(DRIVER_VERSION);
-MODULE_LICENSE("Dual BSD/GPL");
+MODULE_LICENSE("GPL v2");
 MODULE_DEVICE_TABLE(pci, pci_ids);
