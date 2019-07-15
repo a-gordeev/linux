@@ -387,9 +387,9 @@ static int __kthread_xfer_rw_sg(void *_data)
 }
 
 static int __xfer_rw_sg_smp(struct avalon_dma *avalon_dma,
-			  enum dma_data_direction dir,
-			  dma_addr_t dev_addr, struct sg_table *sgt,
-			  void (*xfer_callback)(void *dma_async_param))
+			    enum dma_data_direction dir,
+			    dma_addr_t dev_addr, struct sg_table *sgt,
+			    void (*xfer_callback)(void *dma_async_param))
 {
 	struct kthread_xfer_rw_sg_data data = {
 		avalon_dma,
@@ -450,9 +450,9 @@ kthread_err:
 }
 
 static int __xfer_rw_sg(struct avalon_dma *avalon_dma,
-		      enum dma_data_direction dir,
-		      dma_addr_t dev_addr, struct sg_table *sgt,
-		      void (*xfer_callback)(void *dma_async_param))
+			enum dma_data_direction dir,
+			dma_addr_t dev_addr, struct sg_table *sgt,
+			void (*xfer_callback)(void *dma_async_param))
 {
 	struct device *dev = avalon_dma->dev;
 	struct xfer_callback_info info;
