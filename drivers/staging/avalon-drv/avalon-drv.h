@@ -17,8 +17,6 @@
 
 #include <linux/avalon-dma.h>
 
-#define DRIVER_VERSION "0.0.0"
-
 #define DRIVER_NAME "avalon-drv"
 
 struct avalon_dev {
