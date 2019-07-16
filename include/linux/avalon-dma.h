@@ -68,5 +68,7 @@ int avalon_dma_issue_pending(struct avalon_dma *avalon_dma);
 
 #define TARGET_MEM_BASE		CONFIG_AVALON_DMA_TARGET_BASE
 #define TARGET_MEM_SIZE		CONFIG_AVALON_DMA_TARGET_SIZE
+#define TARGET_DMA_SIZE		(2 * AVALON_DMA_MAX_TANSFER_SIZE)
+#define TARGET_DMA_SIZE_SG	TARGET_MEM_SIZE
 
 #endif

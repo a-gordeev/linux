@@ -22,7 +22,7 @@
 #include "avalon-drv-util.h"
 
 static const gfp_t gfp_flags	= GFP_KERNEL;
-static const size_t dma_size	= 2 * AVALON_DMA_MAX_TANSFER_SIZE;
+static const size_t dma_size	= TARGET_DMA_SIZE;
 static const int nr_dma_reps	= 2;
 static const int dmas_per_cpu	= 8;
 

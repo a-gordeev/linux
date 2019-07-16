@@ -1,3 +1,15 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Avalon DMA tool
+ *
+ * Copyright (C) 2018-2019 DAQRI, http://www.daqri.com/
+ *
+ * Created by Alexander Gordeev <alexander.gordeev@daqri.com>
+ *
+ * This file is subject to the terms and conditions of the GNU General
+ * Public License. See the file COPYING in the main directory of the
+ * Linux distribution for more details.
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -12,13 +24,6 @@
 #include <sys/mman.h>
 
 #include <uapi/linux/avalon-drv-ioctl.h>
-
-#define AVALON_DMA_FIXUP_SIZE		0x100
-#define AVALON_DMA_MAX_TANSFER_SIZE	(0x100000 - AVALON_DMA_FIXUP_SIZE)
-
-#define TARGET_MEM_SIZE			(0x80000000 - 0x70000000)
-#define DMA_SIZE			(2 * AVALON_DMA_MAX_TANSFER_SIZE)
-#define DMA_SIZE_SG			(TARGET_MEM_SIZE)
 
 #define DEV_NAME	"/dev/avalon-drv"
 #define DMA_IN		"./dma.in"
@@ -50,7 +55,7 @@ static int print_mem(char *buf, size_t buf_len,
 	return total;
 }
 
-void dump_mem(void *data, size_t len)
+static void dump_mem(void *data, size_t len)
 {
 	char buf[64];
 	int n;
@@ -64,6 +69,7 @@ void dump_mem(void *data, size_t len)
 
 int main(int argc, char **argv)
 {
+	struct avalon_ioc_info info;
 	int dev, fd_rd, fd_wr;
 	void *buf_rd = NULL, *buf_wr = NULL;
 	size_t len_rd = 0, len_wr = 0;
@@ -110,25 +116,32 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
+	if (ioctl(dev, IOCTL_AVALON_GET_INFO, &info) < 0) {
+		fprintf(stderr, "ioctl %x failed err %d\n", cmd, errno);
+		return -1;
+	}
+
+	printf("\nmem_addr\t%08lx\nmem_size\t%08lx\ndma_size\t%08lx\ndma_size_sg\t%08lx\n", info.mem_addr, info.mem_size, info.dma_size, info.dma_size_sg);
+
 	switch (cmd) {
 	case IOCTL_AVALON_DMA_READ:
 	case IOCTL_AVALON_DMA_WRITE:
 	case IOCTL_AVALON_DMA_RDWR:
-		len_rd = DMA_SIZE;
-		len_wr = DMA_SIZE;
+		len_rd = info.dma_size;
+		len_wr = info.dma_size;
 		break;
 
 	case IOCTL_AVALON_DMA_READ_SG:
 	case IOCTL_AVALON_DMA_READ_SG_SMP:
 	case IOCTL_AVALON_DMA_WRITE_SG:
 	case IOCTL_AVALON_DMA_WRITE_SG_SMP:
-		len_rd = DMA_SIZE_SG;
-		len_wr = DMA_SIZE_SG;
+		len_rd = info.dma_size_sg;
+		len_wr = info.dma_size_sg;
 		break;
 
 	case IOCTL_AVALON_DMA_RDWR_SG:
-		len_rd = DMA_SIZE_SG / 2;
-		len_wr = DMA_SIZE_SG / 2;
+		len_rd = info.dma_size_sg / 2;
+		len_wr = info.dma_size_sg / 2;
 		off_rd = 0;
 		off_wr = len_rd;
 		break;
@@ -255,7 +268,7 @@ mmap_err:
 		dump_mem(buf_wr, len_wr);
 
 	if (ioctl(dev, cmd, iovec) < 0) {
-		fprintf(stderr, "ioctl %x failed\n", cmd);
+		fprintf(stderr, "ioctl %x failed err %d\n", cmd, errno);
 		return -1;
 	}
 

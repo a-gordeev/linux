@@ -30,11 +30,30 @@ long avalon_dev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	struct iovec iovec[2];
 	void __user *buf = NULL, __user *buf_rd = NULL, __user *buf_wr = NULL;
 	size_t len = 0, len_rd = 0, len_wr = 0;
-	int ret;
+	int ret = 0;
 
 	dev_dbg(dev, "%s(%d) { cmd %x", __FUNCTION__, __LINE__, cmd);
 
 	switch (cmd) {
+	case IOCTL_AVALON_GET_INFO: {
+		struct avalon_ioc_info info = {
+			.mem_addr	= TARGET_MEM_BASE,
+			.mem_size	= TARGET_MEM_SIZE,
+			.dma_size	= TARGET_DMA_SIZE,
+			.dma_size_sg	= TARGET_DMA_SIZE_SG,
+		};
+
+		if (copy_to_user((void*)arg, &info, sizeof(info))) {
+			ret = -EFAULT;
+			goto done;
+		}
+
+		goto done;
+	}
+	case IOCTL_AVALON_SET_INFO:
+		ret = -EINVAL;
+		goto done;
+
 	case IOCTL_AVALON_DMA_READ:
 	case IOCTL_AVALON_DMA_WRITE:
 	case IOCTL_AVALON_DMA_READ_SG:
