@@ -24,8 +24,8 @@ static void avalon_drv_vm_close(struct vm_area_struct *vma)
 	struct dma_sg_buf *sg_buf = vma->vm_private_data;
 	struct device *dev = sg_buf->dev;
 
-	dev_info(dev, "%s(%d) vma %px sg_buf %px",
-		 __FUNCTION__, __LINE__, vma, sg_buf);
+	dev_dbg(dev, "%s(%d) vma %px sg_buf %px",
+		__FUNCTION__, __LINE__, vma, sg_buf);
 
 	dma_sg_buf_free(sg_buf);
 }
@@ -46,9 +46,8 @@ int avalon_dev_mmap(struct file *file, struct vm_area_struct *vma)
 	int ret;
 	int i;
 
-	dev_info(dev, "%s(%d) { vm_pgoff %08lx vm_flags %08lx, size %lu",
-		 __FUNCTION__, __LINE__,
-		 vma->vm_pgoff, vma->vm_flags, size);
+	dev_dbg(dev, "%s(%d) { vm_pgoff %08lx vm_flags %08lx, size %lu",
+		__FUNCTION__, __LINE__, vma->vm_pgoff, vma->vm_flags, size);
 
 	if (!(IS_ALIGNED(addr, PAGE_SIZE) && IS_ALIGNED(size, PAGE_SIZE)))
 		return -EINVAL;
@@ -84,8 +83,8 @@ int avalon_dev_mmap(struct file *file, struct vm_area_struct *vma)
 
 	vma->vm_private_data = sg_buf;
 
-	dev_info(dev, "%s(%d) } vma %px sg_buf %px",
-		 __FUNCTION__, __LINE__, vma, sg_buf);
+	dev_dbg(dev, "%s(%d) } vma %px sg_buf %px",
+		__FUNCTION__, __LINE__, vma, sg_buf);
 
 	return 0;
 
@@ -93,7 +92,7 @@ ins_page_err:
 	dma_sg_buf_free(sg_buf);
 
 sg_buf_alloc_err:
-	dev_err(dev, "%s(%d) vma %px err %d",
+	dev_dbg(dev, "%s(%d) } vma %px err %d",
 		__FUNCTION__, __LINE__, vma, ret);
 
 	return ret;

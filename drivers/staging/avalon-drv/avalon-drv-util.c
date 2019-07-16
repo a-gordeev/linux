@@ -49,7 +49,7 @@ void dump_mem(struct device *dev, void *data, size_t len)
 
 	print_mem(buf + n, sizeof(buf) - n, data, len);
 
-	dev_info(dev, "%s(%d): %s]\n", __FUNCTION__, __LINE__, buf);
+	dev_dbg(dev, "%s(%d): %s]\n", __FUNCTION__, __LINE__, buf);
 }
 #else
 void dump_mem(struct device *dev, void *data, size_t len)

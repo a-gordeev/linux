@@ -20,7 +20,7 @@
 #include "avalon-drv.h"
 #include "avalon-drv-xfer.h"
 
-static const gfp_t gfp_flags	= GFP_KERNEL;
+static const gfp_t gfp_flags = GFP_KERNEL;
 
 long avalon_dev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
@@ -32,7 +32,7 @@ long avalon_dev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	size_t len = 0, len_rd = 0, len_wr = 0;
 	int ret;
 
-	dev_info(dev, "%s(%d) { cmd %x", __FUNCTION__, __LINE__, cmd);
+	dev_dbg(dev, "%s(%d) { cmd %x", __FUNCTION__, __LINE__, cmd);
 
 	switch (cmd) {
 	case IOCTL_AVALON_DMA_READ:
@@ -71,7 +71,7 @@ long avalon_dev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		goto done;
 	};
 
-	dev_info(dev,
+	dev_dbg(dev,
 		 "%s(%d) buf %px len %ld\nbuf_rd %px len_rd %ld\nbuf_wr %px len_wr %ld\n",
 		 __FUNCTION__, __LINE__, buf, len, buf_rd, len_rd, buf_wr, len_wr);
 
@@ -112,7 +112,7 @@ long avalon_dev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	};
 
 done:
-	dev_info(dev, "%s(%d) } = %d", __FUNCTION__, __LINE__, ret);
+	dev_dbg(dev, "%s(%d) } = %d", __FUNCTION__, __LINE__, ret);
 
 	return ret;
 }

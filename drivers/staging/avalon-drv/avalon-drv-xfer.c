@@ -65,8 +65,8 @@ static int xfer_callback(struct xfer_callback_info *info, const char* pfx)
 		ret = 1;
 	}
 
-	dev_info(info->dev, "%s_%s(%d) done = %d in %lli us",
-		 pfx, __FUNCTION__, __LINE__, ret, time_us);
+	dev_dbg(info->dev, "%s_%s(%d) done = %d in %lli us",
+		pfx, __FUNCTION__, __LINE__, ret, time_us);
 
 	return ret;
 }
@@ -99,7 +99,8 @@ int xfer_rw(struct avalon_dma *avalon_dma,
 	const size_t size = dma_size;
 	const int nr_reps = nr_dma_reps;
 
-	dev_info(dev, "%s(%d) { dir %s", __FUNCTION__, __LINE__, __dir_str[dir]);
+	dev_dbg(dev, "%s(%d) { dir %s",
+		__FUNCTION__, __LINE__, __dir_str[dir]);
 
 	if (user_len < size) {
 		ret = -EINVAL;
@@ -144,13 +145,14 @@ int xfer_rw(struct avalon_dma *avalon_dma,
 
 	init_callback_info(&info, dev, nr_reps);
 
-	dev_info(dev, "%s(%d) dma_addr %08llx size %lu dir %d reps = %d",
-		 __FUNCTION__, __LINE__, dma_addr, size, dir, nr_reps);
+	dev_dbg(dev, "%s(%d) dma_addr %08llx size %lu dir %d reps = %d",
+		__FUNCTION__, __LINE__, dma_addr, size, dir, nr_reps);
 
 	for (i = 0; i < nr_reps; i++) {
 		ret = avalon_dma_submit_xfer(avalon_dma,
 					     dir,
-					     TARGET_MEM_BASE, dma_addr, size,
+					     TARGET_MEM_BASE,
+					     dma_addr, size,
 					     xfer_callback, &info);
 		if (ret)
 			goto dma_submit_err;
@@ -181,7 +183,7 @@ cp_from_user_err:
 mem_alloc_err:
 dma_dir_err:
 mem_len_err:
-	dev_info(dev, "%s(%d) } = %d", __FUNCTION__, __LINE__, ret);
+	dev_dbg(dev, "%s(%d) } = %d", __FUNCTION__, __LINE__, ret);
 
 	return ret;
 }
@@ -202,7 +204,7 @@ int xfer_simultaneous(struct avalon_dma *avalon_dma,
 	const dma_addr_t target_wr = target_rd + size;
 	const int nr_reps = nr_dma_reps;
 
-	dev_info(dev, "%s(%d) {", __FUNCTION__, __LINE__);
+	dev_dbg(dev, "%s(%d) {", __FUNCTION__, __LINE__);
 
 	if (user_len_rd < size) {
 		ret = -EINVAL;
@@ -274,8 +276,10 @@ int xfer_simultaneous(struct avalon_dma *avalon_dma,
 	if (ret)
 		goto issue_pending_err;
 
-	dev_info(dev, "%s(%d) dma_addr %08llx/%08llx rd_size %lu wr_size %lu",
-		 __FUNCTION__, __LINE__, dma_addr_rd, dma_addr_wr, size, size);
+	dev_dbg(dev,
+		"%s(%d) dma_addr %08llx/%08llx rd_size %lu wr_size %lu",
+		__FUNCTION__, __LINE__,
+		dma_addr_rd, dma_addr_wr, size, size);
 
 	ret = wait_for_completion_interruptible(&info.completion);
 	if (ret)
@@ -302,7 +306,7 @@ wr_mem_alloc_err:
 
 rd_mem_alloc_err:
 mem_len_err:
-	dev_info(dev, "%s(%d) } = %d", __FUNCTION__, __LINE__, ret);
+	dev_dbg(dev, "%s(%d) } = %d", __FUNCTION__, __LINE__, ret);
 
 	return ret;
 }
@@ -359,8 +363,8 @@ static int kthread_xfer_rw_sg(struct avalon_dma *avalon_dma,
 	return 0;
 
 err:
-	dev_err(dev, "%s(%d) cpu %d avalon_dma_submit_xfer_sg() %d",
-		 __FUNCTION__, __LINE__, smp_processor_id(), ret);
+	dev_dbg(dev, "%s(%d) cpu %d avalon_dma_submit_xfer_sg() %d",
+		__FUNCTION__, __LINE__, smp_processor_id(), ret);
 
 	while (!kthread_should_stop())
 		cond_resched();
@@ -518,8 +522,8 @@ int xfer_rw_sg(struct avalon_dma *avalon_dma,
 	dma_addr_t dma_addr;
 	int ret;
 
-	dev_info(dev, "%s(%d) { dir %s smp %d",
-		 __FUNCTION__, __LINE__, __dir_str[dir], is_smp);
+	dev_dbg(dev, "%s(%d) { dir %s smp %d",
+		__FUNCTION__, __LINE__, __dir_str[dir], is_smp);
 
 	vma = check_vma((unsigned long)user_buf, user_len);
 	if (IS_ERR(vma))
@@ -560,7 +564,7 @@ int xfer_rw_sg(struct avalon_dma *avalon_dma,
 		dump_mem(dev, sg_buf->vaddr, 16);
 
 xfer_err:
-	dev_info(dev, "%s(%d) } = %d", __FUNCTION__, __LINE__, ret);
+	dev_dbg(dev, "%s(%d) } = %d", __FUNCTION__, __LINE__, ret);
 
 	return ret;
 }
@@ -579,7 +583,7 @@ int xfer_simultaneous_sg(struct avalon_dma *avalon_dma,
 
 	const int nr_reps = nr_dma_reps;
 
-	dev_info(dev, "%s(%d) {", __FUNCTION__, __LINE__);
+	dev_dbg(dev, "%s(%d) {", __FUNCTION__, __LINE__);
 
 	vma_rd = check_vma((unsigned long)user_buf_rd, user_len_rd);
 	if (IS_ERR(vma_rd))
@@ -649,7 +653,7 @@ wait_err:
 issue_pending_err:
 dma_submit_wr_err:
 dma_submit_rd_err:
-	dev_info(dev, "%s(%d) } = %d", __FUNCTION__, __LINE__, ret);
+	dev_dbg(dev, "%s(%d) } = %d", __FUNCTION__, __LINE__, ret);
 
 	return ret;
 }
