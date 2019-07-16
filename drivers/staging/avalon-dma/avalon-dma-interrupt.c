@@ -15,16 +15,16 @@
 
 #include "avalon-dma-core.h"
 
-static bool dma_desc_done(struct avalon_dma_tx_descriptor *desc)
+static bool dma_desc_done(struct avalon_dma_tx_desc *desc)
 {
-	if (desc->type == xfer_buffer) {
-		struct xfer_buffer *xfer_buffer = &desc->xfer_info.xfer_buffer;
+	if (desc->type == xfer_buf) {
+		struct xfer_buf *xfer_buf = &desc->xfer_info.xfer_buf;
 
-		BUG_ON(xfer_buffer->offset > xfer_buffer->size);
-		if (xfer_buffer->offset < xfer_buffer->size)
+		BUG_ON(xfer_buf->offset > xfer_buf->size);
+		if (xfer_buf->offset < xfer_buf->size)
 			return false;
-	} else if (desc->type == xfer_sg_table) {
-		struct xfer_sg_table *xfer_sgt = &desc->xfer_info.xfer_sg_table;
+	} else if (desc->type == xfer_sgt) {
+		struct xfer_sgt *xfer_sgt = &desc->xfer_info.xfer_sgt;
 		struct scatterlist *sg_curr = xfer_sgt->sg_curr;
 		unsigned int sg_len = sg_dma_len(sg_curr);
 
@@ -44,7 +44,7 @@ static bool dma_desc_done(struct avalon_dma_tx_descriptor *desc)
 irqreturn_t avalon_dma_interrupt(int irq, void *dev_id)
 {
 	struct avalon_dma *avalon_dma = (struct avalon_dma*)dev_id;
-	struct avalon_dma_tx_descriptor *desc;
+	struct avalon_dma_tx_desc *desc;
 	u32 *rd_flags = avalon_dma->dma_desc_table_rd.cpu_addr->flags;
 	u32 *wr_flags = avalon_dma->dma_desc_table_wr.cpu_addr->flags;
 	bool rd_done;
@@ -84,7 +84,7 @@ irqreturn_t avalon_dma_interrupt(int irq, void *dev_id)
 			avalon_dma->active_desc = NULL;
 		} else {
 			desc = list_first_entry(&avalon_dma->desc_issued,
-						struct avalon_dma_tx_descriptor,
+						struct avalon_dma_tx_desc,
 						node);
 			avalon_dma->active_desc = desc;
 		}
@@ -106,7 +106,7 @@ irqreturn_t avalon_dma_interrupt(int irq, void *dev_id)
 void avalon_dma_tasklet(unsigned long arg)
 {
 	struct avalon_dma *avalon_dma = (struct avalon_dma *)arg;
-	struct avalon_dma_tx_descriptor *desc;
+	struct avalon_dma_tx_desc *desc;
 	LIST_HEAD(desc_completed);
 
 	spin_lock_irq(&avalon_dma->lock);

@@ -20,14 +20,14 @@
 
 #define INTERRUPT_NAME	"avalon_dma"
 
-struct avalon_dma_tx_descriptor {
+struct avalon_dma_tx_desc {
 	struct list_head node;
 
 	struct avalon_dma *avalon_dma;
 
 	enum avalon_dma_xfer_desc_type {
-		xfer_buffer,
-		xfer_sg_table
+		xfer_buf,
+		xfer_sgt
 	} type;
 
 	enum dma_data_direction direction;
@@ -36,23 +36,23 @@ struct avalon_dma_tx_descriptor {
 	void *callback_param;
 
 	union avalon_dma_xfer_info {
-		struct xfer_buffer {
+		struct xfer_buf {
 			dma_addr_t dev_addr;
 			dma_addr_t host_addr;
 			unsigned int size;
 			unsigned int offset;
-		} xfer_buffer;
-		struct xfer_sg_table {
+		} xfer_buf;
+		struct xfer_sgt {
 			dma_addr_t dev_addr;
 			struct sg_table *sg_table;
 			struct scatterlist *sg_curr;
 			unsigned int sg_offset;
-		} xfer_sg_table;
+		} xfer_sgt;
 	} xfer_info;
 };
 
 int avalon_dma_start_xfer(struct avalon_dma *avalon_dma,
-			  struct avalon_dma_tx_descriptor *desc);
+			  struct avalon_dma_tx_desc *desc);
 
 #endif
 

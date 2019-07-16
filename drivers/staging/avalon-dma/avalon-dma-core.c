@@ -24,9 +24,9 @@
 #define AVALON_DMA_DESC_ALLOC
 #define AVALON_DMA_DESC_COUNT	0
 
-static struct avalon_dma_tx_descriptor *__alloc_desc(gfp_t flags)
+static struct avalon_dma_tx_desc *__alloc_desc(gfp_t flags)
 {
-	struct avalon_dma_tx_descriptor *desc;
+	struct avalon_dma_tx_desc *desc;
 
 	desc = kzalloc(sizeof(*desc), flags);
 	if (!desc)
@@ -40,11 +40,11 @@ static struct avalon_dma_tx_descriptor *__alloc_desc(gfp_t flags)
 
 static void free_descs(struct list_head *descs)
 {
-	struct avalon_dma_tx_descriptor *desc;
+	struct avalon_dma_tx_desc *desc;
 	struct list_head *node, *tmp;
 
 	list_for_each_safe(node, tmp, descs) {
-		desc = list_entry(node, struct avalon_dma_tx_descriptor, node);
+		desc = list_entry(node, struct avalon_dma_tx_desc, node);
 		list_del(node);
 
 		kfree(desc);
@@ -53,7 +53,7 @@ static void free_descs(struct list_head *descs)
 
 static int alloc_descs(struct list_head *descs, int nr_descs)
 {
-	struct avalon_dma_tx_descriptor *desc;
+	struct avalon_dma_tx_desc *desc;
 	int i;
 
 	for (i = 0; i < nr_descs; i++) {
@@ -69,10 +69,10 @@ static int alloc_descs(struct list_head *descs, int nr_descs)
 }
 
 #ifdef AVALON_DMA_DESC_ALLOC
-struct avalon_dma_tx_descriptor *get_desc_locked(spinlock_t *lock,
+struct avalon_dma_tx_desc *get_desc_locked(spinlock_t *lock,
 						 struct list_head *descs)
 {
-	struct avalon_dma_tx_descriptor *desc;
+	struct avalon_dma_tx_desc *desc;
 
 	assert_spin_locked(lock);
 
@@ -89,14 +89,14 @@ struct avalon_dma_tx_descriptor *get_desc_locked(spinlock_t *lock,
 		list_add(&desc->node, descs);
 	} else {
 		desc = list_first_entry(descs,
-					struct avalon_dma_tx_descriptor,
+					struct avalon_dma_tx_desc,
 					node);
 	}
 
 	return desc;
 }
 #else
-struct avalon_dma_tx_descriptor *get_desc_locked(spinlock_t *lock,
+struct avalon_dma_tx_desc *get_desc_locked(spinlock_t *lock,
 						 struct list_head *descs)
 {
 	assert_spin_locked(lock);
@@ -104,7 +104,7 @@ struct avalon_dma_tx_descriptor *get_desc_locked(spinlock_t *lock,
 	if (unlikely(list_empty(descs)))
 		return NULL;
 
-	return list_first_entry(descs, struct avalon_dma_tx_descriptor, node);
+	return list_first_entry(descs, struct avalon_dma_tx_desc, node);
 }
 #endif
 
@@ -200,7 +200,7 @@ EXPORT_SYMBOL_GPL(avalon_dma_init);
 static void avalon_dma_sync(struct avalon_dma *avalon_dma)
 {
 	struct list_head *head = &avalon_dma->desc_allocated;
- 	struct avalon_dma_tx_descriptor *desc;
+ 	struct avalon_dma_tx_desc *desc;
 	int nr_retries = 0;
 	unsigned long flags;
 
@@ -272,7 +272,7 @@ static int submit_xfer(struct avalon_dma *avalon_dma,
 		       avalon_dma_xfer_callback callback,
 		       void *callback_param)
 {
-	struct avalon_dma_tx_descriptor *desc;
+	struct avalon_dma_tx_desc *desc;
 	unsigned long flags;
 	int ret = 0;
 
@@ -290,10 +290,10 @@ static int submit_xfer(struct avalon_dma *avalon_dma,
 	desc->callback = callback;
 	desc->callback_param = callback_param;
 
-	if (type == xfer_buffer)
-		desc->xfer_info.xfer_buffer = xfer_info->xfer_buffer;
-	else if (type == xfer_sg_table)
-		desc->xfer_info.xfer_sg_table = xfer_info->xfer_sg_table;
+	if (type == xfer_buf)
+		desc->xfer_info.xfer_buf = xfer_info->xfer_buf;
+	else if (type == xfer_sgt)
+		desc->xfer_info.xfer_sgt = xfer_info->xfer_sgt;
 	else
 		BUG();
 
@@ -306,7 +306,7 @@ static int submit_xfer(struct avalon_dma *avalon_dma,
 
 int avalon_dma_issue_pending(struct avalon_dma *avalon_dma)
 {
-	struct avalon_dma_tx_descriptor *desc;
+	struct avalon_dma_tx_desc *desc;
 	unsigned long flags;
 	int ret = 0;
 
@@ -327,7 +327,7 @@ int avalon_dma_issue_pending(struct avalon_dma *avalon_dma)
 		BUG_ON(avalon_dma->active_desc);
 
 		desc = list_first_entry(&avalon_dma->desc_issued,
-					struct avalon_dma_tx_descriptor,
+					struct avalon_dma_tx_desc,
 					node);
 
 		ret = avalon_dma_start_xfer(avalon_dma, desc);
@@ -356,12 +356,12 @@ int avalon_dma_submit_xfer(struct avalon_dma *avalon_dma,
 {
 	union avalon_dma_xfer_info xi;
 
-	xi.xfer_buffer.dev_addr = dev_addr;
-	xi.xfer_buffer.host_addr = host_addr;
-	xi.xfer_buffer.size = size;
-	xi.xfer_buffer.offset = 0;
+	xi.xfer_buf.dev_addr	= dev_addr;
+	xi.xfer_buf.host_addr	= host_addr;
+	xi.xfer_buf.size	= size;
+	xi.xfer_buf.offset	= 0;
 
-	return submit_xfer(avalon_dma, xfer_buffer, direction, &xi,
+	return submit_xfer(avalon_dma, xfer_buf, direction, &xi,
 			   callback, callback_param);
 }
 EXPORT_SYMBOL_GPL(avalon_dma_submit_xfer);
@@ -375,57 +375,57 @@ int avalon_dma_submit_xfer_sg(struct avalon_dma *avalon_dma,
 {
 	union avalon_dma_xfer_info xi;
 
-	xi.xfer_sg_table.dev_addr = dev_addr;
-	xi.xfer_sg_table.sg_table = sg_table;
-	xi.xfer_sg_table.sg_curr = sg_table->sgl;
-	xi.xfer_sg_table.sg_offset = 0;
+	xi.xfer_sgt.dev_addr	= dev_addr;
+	xi.xfer_sgt.sg_table	= sg_table;
+	xi.xfer_sgt.sg_curr	= sg_table->sgl;
+	xi.xfer_sgt.sg_offset	= 0;
 
-	return submit_xfer(avalon_dma, xfer_sg_table, direction, &xi,
+	return submit_xfer(avalon_dma, xfer_sgt, direction, &xi,
 			   callback, callback_param);
 }
 EXPORT_SYMBOL_GPL(avalon_dma_submit_xfer_sg);
 
 static int setup_dma_descs_buf(struct dma_desc *dma_descs,
-			       struct avalon_dma_tx_descriptor *desc)
+			       struct avalon_dma_tx_desc *desc)
 {
-	struct xfer_buffer *xfer_buffer = &desc->xfer_info.xfer_buffer;
-	unsigned int offset = xfer_buffer->offset;
-	unsigned int size = xfer_buffer->size - offset;
-	dma_addr_t dev_addr = xfer_buffer->dev_addr + offset;
-	dma_addr_t host_addr = xfer_buffer->host_addr + offset;
+	struct xfer_buf *xfer_buf = &desc->xfer_info.xfer_buf;
+	unsigned int offset = xfer_buf->offset;
+	unsigned int size = xfer_buf->size - offset;
+	dma_addr_t dev_addr = xfer_buf->dev_addr + offset;
+	dma_addr_t host_addr = xfer_buf->host_addr + offset;
 	unsigned int set;
 	int ret;
 
-	BUG_ON(size > xfer_buffer->size);
+	BUG_ON(size > xfer_buf->size);
 	ret = setup_descs(dma_descs, 0, desc->direction,
 			  dev_addr, host_addr, size, &set);
 	BUG_ON(!ret);
 	if (ret > 0)
-		xfer_buffer->offset += set;
+		xfer_buf->offset += set;
 
 	return ret;
 }
 
 static int setup_dma_descs_sg(struct dma_desc *dma_descs,
-			      struct avalon_dma_tx_descriptor *desc)
+			      struct avalon_dma_tx_desc *desc)
 {
-	struct xfer_sg_table *xfer_sg_table = &desc->xfer_info.xfer_sg_table;
+	struct xfer_sgt *xfer_sgt = &desc->xfer_info.xfer_sgt;
 	struct scatterlist *sg_stop;
 	unsigned int sg_set;
 	int ret;
 
 	ret = setup_descs_sg(dma_descs, 0,
 			     desc->direction,
-			     xfer_sg_table->dev_addr, xfer_sg_table->sg_table,
-			     xfer_sg_table->sg_curr, xfer_sg_table->sg_offset,
+			     xfer_sgt->dev_addr, xfer_sgt->sg_table,
+			     xfer_sgt->sg_curr, xfer_sgt->sg_offset,
 			     &sg_stop, &sg_set);
 	BUG_ON(!ret);
 	if (ret > 0) {
-		if (sg_stop == xfer_sg_table->sg_curr)
-			xfer_sg_table->sg_offset += sg_set;
+		if (sg_stop == xfer_sgt->sg_curr)
+			xfer_sgt->sg_offset += sg_set;
 		else {
-			xfer_sg_table->sg_curr = sg_stop;
-			xfer_sg_table->sg_offset = sg_set;
+			xfer_sgt->sg_curr = sg_stop;
+			xfer_sgt->sg_offset = sg_set;
 		}
 	}
 
@@ -433,13 +433,13 @@ static int setup_dma_descs_sg(struct dma_desc *dma_descs,
 }
 
 static int setup_dma_descs(struct dma_desc *dma_descs,
-			   struct avalon_dma_tx_descriptor *desc)
+			   struct avalon_dma_tx_desc *desc)
 {
 	int ret;
 
-	if (desc->type == xfer_buffer) {
+	if (desc->type == xfer_buf) {
 		ret = setup_dma_descs_buf(dma_descs, desc);
-	} else if (desc->type == xfer_sg_table) {
+	} else if (desc->type == xfer_sgt) {
 		ret = setup_dma_descs_sg(dma_descs, desc);
 	} else {
 		BUG();
@@ -463,7 +463,7 @@ static void start_xfer(void __iomem *base, size_t ctrl_off,
 }
 
 int avalon_dma_start_xfer(struct avalon_dma *avalon_dma,
-			  struct avalon_dma_tx_descriptor *desc)
+			  struct avalon_dma_tx_desc *desc)
 {
 	size_t ctrl_off;
 	struct __dma_desc_table *__table;

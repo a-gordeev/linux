@@ -21,7 +21,7 @@
 
 typedef void (*avalon_dma_xfer_callback)(void *dma_async_param);
 
-struct avalon_dma_tx_descriptor;
+struct avalon_dma_tx_desc;
 
 struct avalon_dma {
 	spinlock_t lock;
@@ -29,7 +29,7 @@ struct avalon_dma {
 	struct tasklet_struct tasklet;
 	unsigned int irq;
 
-	struct avalon_dma_tx_descriptor *active_desc;
+	struct avalon_dma_tx_desc *active_desc;
 
 	struct list_head desc_allocated;
 	struct list_head desc_submitted;
