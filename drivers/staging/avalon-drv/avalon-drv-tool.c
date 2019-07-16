@@ -251,8 +251,6 @@ mmap_err:
 		close(fd_wr);
 	}
 
-	if (buf_rd)
-		dump_mem(buf_rd, len_rd);
 	if (buf_wr)
 		dump_mem(buf_wr, len_wr);
 
@@ -263,8 +261,6 @@ mmap_err:
 
 	if (buf_rd)
 		dump_mem(buf_rd, len_wr);
-	if (buf_wr)
-		dump_mem(buf_wr, len_wr);
 
 	close(dev);
 
