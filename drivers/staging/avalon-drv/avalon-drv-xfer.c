@@ -488,8 +488,8 @@ static int __xfer_rw_sg(struct avalon_dma *avalon_dma,
 	return 0;
 }
 
-static struct vm_area_struct *check_vma(unsigned long addr,
-					unsigned long size)
+static struct vm_area_struct *get_vma(unsigned long addr,
+				      unsigned long size)
 {
 	struct vm_area_struct *vma;
 	unsigned long vm_size;
@@ -525,7 +525,7 @@ int xfer_rw_sg(struct avalon_dma *avalon_dma,
 	dev_dbg(dev, "%s(%d) { dir %s smp %d",
 		__FUNCTION__, __LINE__, __dir_str[dir], is_smp);
 
-	vma = check_vma((unsigned long)user_buf, user_len);
+	vma = get_vma((unsigned long)user_buf, user_len);
 	if (IS_ERR(vma))
 		return PTR_ERR(vma);
 
@@ -585,11 +585,11 @@ int xfer_simultaneous_sg(struct avalon_dma *avalon_dma,
 
 	dev_dbg(dev, "%s(%d) {", __FUNCTION__, __LINE__);
 
-	vma_rd = check_vma((unsigned long)user_buf_rd, user_len_rd);
+	vma_rd = get_vma((unsigned long)user_buf_rd, user_len_rd);
 	if (IS_ERR(vma_rd))
 		return PTR_ERR(vma_rd);
 
-	vma_wr = check_vma((unsigned long)user_buf_wr, user_len_wr);
+	vma_wr = get_vma((unsigned long)user_buf_wr, user_len_wr);
 	if (IS_ERR(vma_wr))
 		return PTR_ERR(vma_wr);
 
