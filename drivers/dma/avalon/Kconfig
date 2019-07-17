@@ -1,0 +1,73 @@
+config AVALON_DMA
+	tristate "Intel Avalon-MM DMA Interface for PCIe"
+	depends on PCI
+	select DMA_ENGINE
+	select DMA_VIRTUAL_CHANNELS
+	help
+	  This selects a driver for Avalon-MM DMA Interface for PCIe
+	  hard IP block used in Intel Arria, Cyclone or Stratix FPGAs.
+
+config AVALON_DMA_PCI_VENDOR_ID
+	hex "PCI Vendor ID"
+	range 0 0xFFFF
+	default 0x1172
+	depends on AVALON_DMA
+
+config AVALON_DMA_PCI_DEVICE_ID
+	hex "PCI Device ID"
+	range 0 0xFFFF
+	default 0xE003
+	depends on AVALON_DMA
+
+config AVALON_DMA_FW_PARAMS
+	bool "Hardware parameters are provided by BIOS"
+	depends on AVALON_DMA
+
+config AVALON_DMA_CTRL_BASE
+	hex
+	default 0
+	depends on AVALON_DMA && !AVALON_DMA_FW_PARAMS
+
+config AVALON_DMA_DMA_MASK_WIDTH
+	int "DMA bitmask width"
+	range 1 64
+	default 64
+	depends on AVALON_DMA && !AVALON_DMA_FW_PARAMS
+
+config AVALON_DMA_RD_EP_DST_LO
+	hex "Read status and desc table low"
+	default 0x80000000
+	depends on AVALON_DMA && !AVALON_DMA_FW_PARAMS
+
+config AVALON_DMA_RD_EP_DST_HI
+	hex "Read status and desc table high"
+	default 0
+	depends on AVALON_DMA && !AVALON_DMA_FW_PARAMS
+
+config AVALON_DMA_WR_EP_DST_LO
+	hex "Write status and desc table low"
+	default 0x80002000
+	depends on AVALON_DMA && !AVALON_DMA_FW_PARAMS
+
+config AVALON_DMA_WR_EP_DST_HI
+	hex "Write status and desc table high"
+	default 0
+	depends on AVALON_DMA && !AVALON_DMA_FW_PARAMS
+
+config AVALON_DMA_MSI_INDEX
+	int "MSI vector index used for the controller"
+	range 0 31
+	default 0
+	depends on AVALON_DMA && !AVALON_DMA_FW_PARAMS
+
+config AVALON_DMA_REGS_BAR
+	int "PCI BAR number the registers are mapped to"
+	range 0 5
+	default 0
+	depends on AVALON_DMA && !AVALON_DMA_FW_PARAMS
+
+config AVALON_TEST
+	depends on AVALON_DMA
+	tristate "Intel Avalon-MM DMA Interface for PCIe test driver"
+	help
+	  This selects a test driver for Avalon-MM DMA Interface for PCI
