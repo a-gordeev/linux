@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: GPL-2.0
+#
+# Avalon DMA engine
+#
+# Author: Alexander Gordeev <a.gordeev.box@gmail.com>
+#
+config AVALON_DMA
+	tristate "Intel Avalon-MM DMA Interface for PCIe"
+	depends on PCI
+	select DMA_ENGINE
+	select DMA_VIRTUAL_CHANNELS
+	help
+	  This selects a driver for Avalon-MM DMA Interface for PCIe
+	  hard IP block used in Intel Arria, Cyclone or Stratix FPGAs.
