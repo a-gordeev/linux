@@ -1,0 +1,88 @@
+# SPDX-License-Identifier: GPL-2.0
+#
+# Avalon DMA engine
+#
+# Author: Alexander Gordeev <a.gordeev.box@gmail.com>
+#
+config AVALON_DMA
+	tristate "Intel Avalon-MM DMA Interface for PCIe"
+	depends on PCI
+	select DMA_ENGINE
+	select DMA_VIRTUAL_CHANNELS
+	help
+	  This selects a driver for Avalon-MM DMA Interface for PCIe
+	  hard IP block used in Intel Arria, Cyclone or Stratix FPGAs.
+
+if AVALON_DMA
+
+config AVALON_DMA_MASK_WIDTH
+	int "Avalon DMA streaming and coherent bitmask width"
+	range 0 64
+	default 64
+	help
+	  Width of bitmask for streaming and coherent DMA operations
+
+config AVALON_DMA_CTRL_BASE
+	hex "Avalon DMA controllers base"
+	default "0x00000000"
+
+config AVALON_DMA_RD_EP_DST_LO
+	hex "Avalon DMA read controller base low"
+	default "0x80000000"
+	help
+	  Specifies the lower 32-bits of the base address of the read
+	  status and descriptor table in the Root Complex memory.
+
+config AVALON_DMA_RD_EP_DST_HI
+	hex "Avalon DMA read controller base high"
+	default "0x00000000"
+	help
+	  Specifies the upper 32-bits of the base address of the read
+	  status and descriptor table in the Root Complex memory.
+
+config AVALON_DMA_WR_EP_DST_LO
+	hex "Avalon DMA write controller base low"
+	default "0x80002000"
+	help
+	  Specifies the lower 32-bits of the base address of the write
+	  status and descriptor table in the Root Complex memory.
+
+config AVALON_DMA_WR_EP_DST_HI
+	hex "Avalon DMA write controller base high"
+	default "0x00000000"
+	help
+	  Specifies the upper 32-bits of the base address of the write
+	  status and descriptor table in the Root Complex memory.
+
+config AVALON_DMA_PCI_VENDOR_ID
+	hex "PCI vendor ID"
+	default "0x1172"
+
+config AVALON_DMA_PCI_DEVICE_ID
+	hex "PCI device ID"
+	default "0xe003"
+
+config AVALON_DMA_PCI_BAR
+	int "PCI device BAR the Avalon DMA controller is mapped to"
+	range 0 5
+	default 0
+	help
+	  Number of PCI BAR the DMA controller is mapped to
+
+config AVALON_DMA_PCI_MSI_COUNT_ORDER
+	int "Count of MSIs the PCI device provides (order)"
+	range 0 5
+	default 5
+	help
+	  Number of vectors the PCI device uses in multiple MSI mode.
+	  This number is provided as the power of two.
+
+config AVALON_DMA_PCI_MSI_VECTOR
+	int "Vector number the DMA controller is mapped to"
+	range 0 31
+	default 0
+	help
+	  Number of MSI vector the DMA controller is mapped to in
+	  multiple MSI mode.
+
+endif
