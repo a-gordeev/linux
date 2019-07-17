@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: GPL-2.0
+#
+# Avalon DMA driver
+#
+# Copyright (C) 2018-2019 DAQRI, http://www.daqri.com/
+#
+# Created by Alexander Gordeev <alexander.gordeev@daqri.com>
+#
+# This file is subject to the terms and conditions of the GNU General
+# Public License. See the file COPYING in the main directory of the
+# Linux distribution for more details.
+#
+config AVALON_DRV
+	depends on AVALON_DMA
+	tristate "Avalon DMA driver"
+	help
+	  This selects a driver for Avalon DMA
