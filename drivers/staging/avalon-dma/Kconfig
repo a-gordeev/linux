@@ -1,0 +1,51 @@
+# SPDX-License-Identifier: GPL-2.0
+#
+# Avalon DMA engine
+#
+# Copyright (C) 2018-2019 DAQRI, http://www.daqri.com/
+#
+# Created by Alexander Gordeev <alexander.gordeev@daqri.com>
+#
+# This file is subject to the terms and conditions of the GNU General
+# Public License. See the file COPYING in the main directory of the
+# Linux distribution for more details.
+#
+config AVALON_DMA
+	tristate "Avalon DMA engine"
+	help
+	  This selects a driver for Avalon DMA engine IP block
+
+config AVALON_DMA_TARGET_BASE
+	hex "Target device base address"
+	default "0x70000000"
+	depends on AVALON_DMA
+
+config AVALON_DMA_TARGET_SIZE
+	hex "Target device memory size"
+	default "0x10000000"
+	depends on AVALON_DMA
+
+config AVALON_DMA_CTRL_BASE
+	hex "Avalon DMA controllers base"
+	default "0x00000000"
+	depends on AVALON_DMA
+
+config AVALON_DMA_RD_EP_DST_LO
+	hex "Avalon DMA read controller base low"
+	default "0x80000000"
+	depends on AVALON_DMA
+
+config AVALON_DMA_RD_EP_DST_HI
+	hex "Avalon DMA read controller base high"
+	default "0x00000000"
+	depends on AVALON_DMA
+
+config AVALON_DMA_WR_EP_DST_LO
+	hex "Avalon DMA write controller base low"
+	default "0x80002000"
+	depends on AVALON_DMA
+
+config AVALON_DMA_WR_EP_DST_HI
+	hex "Avalon DMA write controller base high"
+	default "0x00000000"
+	depends on AVALON_DMA
