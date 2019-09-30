@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: GPL-2.0
+#
+# Avalon DMA engine
+#
+# Author: Alexander Gordeev <a.gordeev.box@gmail.com>
+#
+config AVALON_TEST
+	select AVALON_DMA
+	tristate "Intel Avalon-MM DMA Interface for PCIe test driver"
+	help
+	  This selects a test driver for Avalon-MM DMA Interface for PCI
+
+if AVALON_TEST
+
+config AVALON_TEST_TARGET_BASE
+	hex "Target device base address"
+	default "0x70000000"
+
+config AVALON_TEST_TARGET_SIZE
+	hex "Target device memory size"
+	default "0x10000000"
+
+endif
