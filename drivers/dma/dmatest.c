@@ -592,7 +592,11 @@ static int dmatest_func(void *data)
 	dev = chan->device;
 	src = &thread->src;
 	dst = &thread->dst;
-	if (thread->type == DMA_MEMCPY) {
+	if (thread->type == DMA_SLAVE) {
+		align = params->alignment < 0 ? dev->copy_align :
+						params->alignment;
+		src->cnt = dst->cnt = 1;
+	} else if (thread->type == DMA_MEMCPY) {
 		align = params->alignment < 0 ? dev->copy_align :
 						params->alignment;
 		src->cnt = dst->cnt = 1;
@@ -758,7 +762,32 @@ static int dmatest_func(void *data)
 			um->bidi_cnt++;
 		}
 
-		if (thread->type == DMA_MEMCPY)
+		if (thread->type == DMA_SLAVE) {
+			struct dma_slave_config config = {
+				.direction	= DMA_NONE,
+				.src_addr	= CONFIG_AVALON_TEST_TARGET_BASE,
+				.dst_addr	= CONFIG_AVALON_TEST_TARGET_BASE,
+			};
+
+			config.direction = DMA_TO_DEVICE;
+			ret = dmaengine_slave_config(chan, &config);
+			if (ret)
+				goto prep_err;
+
+			tx = dmaengine_prep_slave_single(chan, srcs[0], len, DMA_TO_DEVICE, flags);
+			if (!tx)
+				goto prep_err;
+
+			if (dma_submit_error(dmaengine_submit(tx)))
+				goto prep_err;
+
+			config.direction = DMA_FROM_DEVICE;
+			ret = dmaengine_slave_config(chan, &config);
+			if (ret)
+				goto prep_err;
+
+			tx = dmaengine_prep_slave_single(chan, dsts[0] + dst->off, len, DMA_FROM_DEVICE, flags);
+		} else if (thread->type == DMA_MEMCPY)
 			tx = dev->device_prep_dma_memcpy(chan,
 							 dsts[0] + dst->off,
 							 srcs[0], len, flags);
@@ -780,6 +809,7 @@ static int dmatest_func(void *data)
 						     len, flags);
 		}
 
+prep_err:
 		if (!tx) {
 			result("prep error", total_tests, src->off,
 			       dst->off, len, ret);
@@ -940,7 +970,9 @@ static int dmatest_add_threads(struct dmatest_info *info,
 	char *op;
 	unsigned int i;
 
-	if (type == DMA_MEMCPY)
+	if (type == DMA_SLAVE)
+		op = "slave";
+	else if (type == DMA_MEMCPY)
 		op = "copy";
 	else if (type == DMA_MEMSET)
 		op = "set";
@@ -998,6 +1030,13 @@ static int dmatest_add_channel(struct dmatest_info *info,
 
 	dtc->chan = chan;
 	INIT_LIST_HEAD(&dtc->threads);
+
+	if (dma_has_cap(DMA_SLAVE, dma_dev->cap_mask)) {
+		if (dmatest == 0) {
+			cnt = dmatest_add_threads(info, dtc, DMA_SLAVE);
+			thread_count += cnt > 0 ? cnt : 0;
+		}
+	}
 
 	if (dma_has_cap(DMA_MEMCPY, dma_dev->cap_mask)) {
 		if (dmatest == 0) {
@@ -1087,6 +1126,7 @@ static void add_threaded_test(struct dmatest_info *info)
 	params->transfer_size = transfer_size;
 	params->polled = polled;
 
+	request_channels(info, DMA_SLAVE);
 	request_channels(info, DMA_MEMCPY);
 	request_channels(info, DMA_MEMSET);
 	request_channels(info, DMA_XOR);

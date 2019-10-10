@@ -441,6 +441,11 @@ struct avalon_dma *avalon_dma_register(struct device *dev,
 	dma_dev->directions = BIT(DMA_DEV_TO_MEM) | BIT(DMA_MEM_TO_DEV);
 	dma_dev->residue_granularity = DMA_RESIDUE_GRANULARITY_DESCRIPTOR;
 
+	dma_dev->copy_align	= DMAENGINE_ALIGN_4_BYTES;
+	dma_dev->xor_align	= DMAENGINE_ALIGN_4_BYTES;
+	dma_dev->pq_align	= DMAENGINE_ALIGN_4_BYTES;
+	dma_dev->fill_align	= DMAENGINE_ALIGN_4_BYTES;
+
 	INIT_LIST_HEAD(&dma_dev->channels);
 
 	chan = &adma->chan;
