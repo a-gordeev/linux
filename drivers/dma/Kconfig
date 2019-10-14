@@ -108,6 +108,12 @@ config AVALON_DMA
 	  This selects a driver for Avalon-MM DMA Interface for PCIe
 	  hard IP block used in Intel Arria, Cyclone or Stratix FPGAs.
 
+config AVALON_TEST
+	select AVALON_DMA
+	tristate "Intel Avalon-MM DMA Interface for PCIe test driver"
+	help
+	  This selects a test driver for Avalon-MM DMA Interface for PCI
+
 config AXI_DMAC
 	tristate "Analog Devices AXI-DMAC DMA support"
 	depends on MICROBLAZE || NIOS2 || ARCH_ZYNQ || ARCH_ZYNQMP || ARCH_INTEL_SOCFPGA || COMPILE_TEST
