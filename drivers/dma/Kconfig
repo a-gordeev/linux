@@ -670,6 +670,7 @@ source "drivers/dma/sh/Kconfig"
 source "drivers/dma/ti/Kconfig"
 
 source "drivers/dma/avalon/Kconfig"
+source "drivers/dma/avalon-test/Kconfig"
 
 # clients
 comment "DMA Clients"
