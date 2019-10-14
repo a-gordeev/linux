@@ -14,18 +14,10 @@
 
 #include "avalon-xfer.h"
 #include "avalon-sg-buf.h"
-#include "avalon-util.h"
 
 static const size_t dma_size	= TARGET_DMA_SIZE;
 static const int nr_dma_reps	= 2;
 static const int dmas_per_cpu	= 8;
-
-char *__dir_str[] = {
-	[DMA_BIDIRECTIONAL]	= "DMA_BIDIRECTIONAL",
-	[DMA_TO_DEVICE]		= "DMA_TO_DEVICE",
-	[DMA_FROM_DEVICE]	= "DMA_FROM_DEVICE",
-	[DMA_NONE]		= "DMA_NONE",
-};
 
 struct xfer_callback_info {
 	struct completion completion;
@@ -44,29 +36,24 @@ static void init_callback_info(struct xfer_callback_info *info, int value)
 	info->kt_start = ktime_get();
 }
 
-static int xfer_callback(struct xfer_callback_info *info, const char *pfx)
+static int xfer_callback(struct xfer_callback_info *info)
 {
-	int ret;
-
 	info->kt_end = ktime_get();
 
 	smp_rmb();
 	if (atomic_dec_and_test(&info->counter)) {
 		complete(&info->completion);
-		ret = 0;
+		return 0;
 	} else {
-		ret = 1;
+		return 1;
 	}
-
-
-	return ret;
 }
 
 static void rd_xfer_callback(void *dma_async_param)
 {
 	struct xfer_callback_info *info = dma_async_param;
 
-	xfer_callback(info, "rd");
+	xfer_callback(info);
 
 }
 
@@ -74,7 +61,7 @@ static void wr_xfer_callback(void *dma_async_param)
 {
 	struct xfer_callback_info *info = dma_async_param;
 
-	xfer_callback(info, "wr");
+	xfer_callback(info);
 }
 
 static int
@@ -158,9 +145,6 @@ int xfer_rw(struct dma_chan *chan,
 	const size_t size = dma_size;
 	const int nr_reps = nr_dma_reps;
 
-	dev_dbg(dev, "%s(%d) { dir %s",
-		__FUNCTION__, __LINE__, __dir_str[dir]);
-
 	if (user_len < size) {
 		ret = -EINVAL;
 		goto mem_len_err;
@@ -176,18 +160,15 @@ int xfer_rw(struct dma_chan *chan,
 		xfer_callback = rd_xfer_callback;
 		break;
 	default:
-		BUG();
 		ret = -EINVAL;
 		goto dma_dir_err;
 	}
 
-	buf = kmalloc(size, GFP_KERNEL);
+	buf = kzalloc(size, GFP_KERNEL);
 	if (!buf) {
 		ret = -ENOMEM;
 		goto mem_alloc_err;
 	}
-
-	memset(buf, 0, size);
 
 	if (dir == DMA_TO_DEVICE) {
 		if (copy_from_user(buf, user_buf, user_len)) {
@@ -203,9 +184,6 @@ int xfer_rw(struct dma_chan *chan,
 	}
 
 	init_callback_info(&info, nr_reps);
-
-	dev_dbg(dev, "%s(%d) dma_addr %08llx size %lu dir %d reps = %d",
-		__FUNCTION__, __LINE__, dma_addr, size, dir, nr_reps);
 
 	for (i = 0; i < nr_reps; i++) {
 		ret = submit_xfer_single(chan, dir,
@@ -237,8 +215,6 @@ cp_from_user_err:
 mem_alloc_err:
 dma_dir_err:
 mem_len_err:
-	dev_dbg(dev, "%s(%d) } = %d", __FUNCTION__, __LINE__, ret);
-
 	return ret;
 }
 
@@ -258,8 +234,6 @@ int xfer_simultaneous(struct dma_chan *chan,
 	const dma_addr_t target_wr = target_rd + size;
 	const int nr_reps = nr_dma_reps;
 
-	dev_dbg(dev, "%s(%d) {", __FUNCTION__, __LINE__);
-
 	if (user_len_rd < size) {
 		ret = -EINVAL;
 		goto mem_len_err;
@@ -274,20 +248,17 @@ int xfer_simultaneous(struct dma_chan *chan,
 		user_len_wr = size;
 	}
 
-	buf_rd = kmalloc(size, GFP_KERNEL);
+	buf_rd = kzalloc(size, GFP_KERNEL);
 	if (!buf_rd) {
 		ret = -ENOMEM;
 		goto rd_mem_alloc_err;
 	}
 
-	buf_wr = kmalloc(size, GFP_KERNEL);
+	buf_wr = kzalloc(size, GFP_KERNEL);
 	if (!buf_wr) {
 		ret = -ENOMEM;
 		goto wr_mem_alloc_err;
 	}
-
-	memset(buf_rd, 0, size);
-	memset(buf_wr, 0, size);
 
 	if (copy_from_user(buf_wr, user_buf_wr, user_len_wr)) {
 		ret = -EFAULT;
@@ -324,11 +295,6 @@ int xfer_simultaneous(struct dma_chan *chan,
 
 	dma_async_issue_pending(chan);
 
-	dev_dbg(dev,
-		"%s(%d) dma_addr %08llx/%08llx rd_size %lu wr_size %lu",
-		__FUNCTION__, __LINE__,
-		dma_addr_rd, dma_addr_wr, size, size);
-
 	ret = wait_for_completion_interruptible(&info.completion);
 	if (ret)
 		goto wait_err;
@@ -353,7 +319,6 @@ wr_mem_alloc_err:
 
 rd_mem_alloc_err:
 mem_len_err:
-	dev_dbg(dev, "%s(%d) } = %d", __FUNCTION__, __LINE__, ret);
 
 	return ret;
 }
@@ -542,9 +507,6 @@ int xfer_rw_sg(struct dma_chan *chan,
 	dma_addr_t dma_addr;
 	int ret;
 
-	dev_dbg(dev, "%s(%d) { dir %s smp %d",
-		__FUNCTION__, __LINE__, __dir_str[dir], is_smp);
-
 	vma = get_vma((unsigned long)user_buf, user_len);
 	if (IS_ERR(vma))
 		return PTR_ERR(vma);
@@ -565,9 +527,6 @@ int xfer_rw_sg(struct dma_chan *chan,
 
 	dma_addr = TARGET_MEM_BASE + vma->vm_pgoff * PAGE_SIZE;
 
-	if (dir == DMA_TO_DEVICE)
-		dump_mem(dev, sg_buf->vaddr, 16);
-
 	dma_sync_sg_for_device(dev,
 			       sg_buf->sgt.sgl, sg_buf->sgt.nents,
 			       sg_buf->dma_dir);
@@ -582,12 +541,7 @@ int xfer_rw_sg(struct dma_chan *chan,
 			    sg_buf->sgt.sgl, sg_buf->sgt.nents,
 			    sg_buf->dma_dir);
 
-	if (dir == DMA_FROM_DEVICE)
-		dump_mem(dev, sg_buf->vaddr, 16);
-
 xfer_err:
-	dev_dbg(dev, "%s(%d) } = %d", __FUNCTION__, __LINE__, ret);
-
 	return ret;
 }
 
@@ -604,8 +558,6 @@ int xfer_simultaneous_sg(struct dma_chan *chan,
 	int i;
 
 	const int nr_reps = nr_dma_reps;
-
-	dev_dbg(dev, "%s(%d) {", __FUNCTION__, __LINE__);
 
 	vma_rd = get_vma((unsigned long)user_buf_rd, user_len_rd);
 	if (IS_ERR(vma_rd))
@@ -672,7 +624,5 @@ int xfer_simultaneous_sg(struct dma_chan *chan,
 wait_err:
 dma_submit_wr_err:
 dma_submit_rd_err:
-	dev_dbg(dev, "%s(%d) } = %d", __FUNCTION__, __LINE__, ret);
-
 	return ret;
 }

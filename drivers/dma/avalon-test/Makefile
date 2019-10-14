@@ -10,5 +10,4 @@ avalon-test-objs :=	avalon-dev.o \
 			avalon-ioctl.o \
 			avalon-mmap.o \
 			avalon-sg-buf.o \
-			avalon-xfer.o \
-			avalon-util.o
+			avalon-xfer.o

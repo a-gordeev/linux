@@ -23,8 +23,6 @@ long avalon_dev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	size_t len = 0, len_rd = 0, len_wr = 0;
 	int ret = 0;
 
-	dev_dbg(dev, "%s(%d) { cmd %x", __FUNCTION__, __LINE__, cmd);
-
 	switch (cmd) {
 	case IOCTL_AVALON_DMA_GET_INFO: {
 		struct avalon_dma_info info = {
@@ -81,10 +79,6 @@ long avalon_dev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		goto done;
 	};
 
-	dev_dbg(dev,
-		"%s(%d) buf %px len %ld\nbuf_rd %px len_rd %ld\nbuf_wr %px len_wr %ld\n",
-		__FUNCTION__, __LINE__, buf, len, buf_rd, len_rd, buf_wr, len_wr);
-
 	switch (cmd) {
 	case IOCTL_AVALON_DMA_READ:
 		ret = xfer_rw(chan, DMA_FROM_DEVICE, buf, len);
@@ -117,12 +111,9 @@ long avalon_dev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		break;
 
 	default:
-		BUG();
 		ret = -EINVAL;
 	};
 
 done:
-	dev_dbg(dev, "%s(%d) } = %d", __FUNCTION__, __LINE__, ret);
-
 	return ret;
 }
