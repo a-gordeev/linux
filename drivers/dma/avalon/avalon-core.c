@@ -355,8 +355,10 @@ avalon_dma_prep_slave_sg(struct dma_chan *dma_chan,
 		unsigned int dma_len = sg_dma_len(sg);
 
 		if (!IS_ALIGNED(dma_addr, sizeof(u32)) ||
-		    !IS_ALIGNED(dma_len, sizeof(u32)))
+		    !IS_ALIGNED(dma_len, sizeof(u32))) {
+			kfree(desc);
 			return NULL;
+		}
 
 		seg->dma_addr = dma_addr;
 		seg->dma_len = dma_len;
@@ -468,9 +470,11 @@ err:
 
 void avalon_dma_unregister(struct avalon_dma *adma)
 {
-	dmaengine_terminate_sync(&adma->chan.vchan.chan);
-	dma_async_device_unregister(&adma->dma_dev);
+	struct virt_dma_chan *vchan = &adma->chan.vchan;
 
+	dmaengine_terminate_sync(&vchan->chan);
+	tasklet_kill(&vchan->task);
+	dma_async_device_unregister(&adma->dma_dev);
 	avalon_dma_term(adma);
 
 	kfree(adma);
