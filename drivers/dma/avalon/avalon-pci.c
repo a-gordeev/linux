@@ -23,40 +23,43 @@ module_param(pci_msi_vector, uint, 0644);
 MODULE_PARM_DESC(pci_msi_vector,
 		 "MSI vector number used for the controller (default: 0)");
 
-static unsigned int pci_msi_count_order = 5;
-module_param(pci_msi_count_order, uint, 0644);
-MODULE_PARM_DESC(pci_msi_count_order,
-		 "Number of MSI vectors (order) device uses (default: 5)");
-
 static int init_interrupts(struct pci_dev *pci_dev)
 {
-	unsigned int nr_vecs = BIT(pci_msi_count_order);
+#if 0
+	int nr_vecs;
+	int virq;
+
+	nr_vecs = pci_msi_vec_count(pci_dev);
+	if (nr_vecs < 0)
+		return nr_vecs;
+
+	nr_vecs = pci_alloc_irq_vectors(pci_dev, 1, nr_vecs, PCI_IRQ_MSI);
+	if (nr_vecs < 0)
+		return nr_vecs;
+
+	virq = pci_irq_vector(pci_dev, pci_msi_vector);
+	if (virq < 0)
+		pci_free_irq_vectors(pci_dev);
+
+	return virq;
+#else
 	int ret;
 
-	ret = pci_alloc_irq_vectors(pci_dev, nr_vecs, nr_vecs, PCI_IRQ_MSI);
-	if (ret < 0) {
+	ret = pci_alloc_irq_vectors(pci_dev, 1, 1, PCI_IRQ_MSI);
+	if (ret < 0)
 		return ret;
-
-	} else if (ret != nr_vecs) {
-		ret = -ENOSPC;
-		goto disable_msi;
-	}
 
 	ret = pci_irq_vector(pci_dev, pci_msi_vector);
 	if (ret < 0)
-		goto disable_msi;
+		pci_free_irq_vectors(pci_dev);
 
 	return ret;
-
-disable_msi:
-	pci_disable_msi(pci_dev);
-
-	return ret;
+#endif
 }
 
 static void term_interrupts(struct pci_dev *pci_dev)
 {
-	pci_disable_msi(pci_dev);
+	pci_free_irq_vectors(pci_dev);
 }
 
 static int avalon_pci_probe(struct pci_dev *pci_dev,
