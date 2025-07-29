@@ -291,6 +291,10 @@ static void avalon_dma_term(struct avalon_dma *adma)
 	struct avalon_dma_hw *hw = &chan->hw;
 	struct device *dev = adma->dev;
 
+	/*
+	 * Vinod Koul: please also kill the vchan tasklet
+	 * me: fixed? (killed already in the caller)
+	 */
 	free_irq(adma->irq, adma);
 
 	dma_free_coherent(
@@ -311,6 +315,9 @@ static int avalon_dma_device_config(struct dma_chan *dma_chan,
 {
 	struct avalon_dma_chan *chan = to_avalon_dma_chan(dma_chan);
 
+	/*
+	 * Vinod Koul: hmmm you dont care about widths and burst sizes?
+	 */
 	if (!IS_ALIGNED(config->src_addr, sizeof(u32)) ||
 	    !IS_ALIGNED(config->dst_addr, sizeof(u32)))
 		return -EINVAL;
@@ -332,6 +339,10 @@ avalon_dma_prep_slave_sg(struct dma_chan *dma_chan,
 	dma_addr_t dev_addr;
 	int i;
 
+	/*
+	 * Vinod Koul: the dst_addr/src_addr is initialized to -1
+	 * so dont you want to check you have a valid address?
+	 */
 	if (direction == DMA_MEM_TO_DEV)
 		dev_addr = chan->dst_addr;
 	else if (direction == DMA_DEV_TO_MEM)
@@ -356,6 +367,10 @@ avalon_dma_prep_slave_sg(struct dma_chan *dma_chan,
 
 		if (!IS_ALIGNED(dma_addr, sizeof(u32)) ||
 		    !IS_ALIGNED(dma_len, sizeof(u32))) {
+			/*
+			 * Vinod Koul: you are leaking desc here
+			 * me: fixed? (below)
+			 */
 			kfree(desc);
 			return NULL;
 		}
@@ -418,6 +433,9 @@ struct avalon_dma *avalon_dma_register(struct device *dev,
 	struct dma_device *dma_dev;
 	int ret;
 
+	/*
+	 * Vinod Koul: any reason for not using device managed API for this?
+	 */
 	adma = kzalloc(sizeof(*adma), GFP_KERNEL);
 	if (!adma)
 		return ERR_PTR(-ENOMEM);
