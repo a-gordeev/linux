@@ -521,8 +521,8 @@ int xfer_rw_sg(struct dma_chan *chan,
 	sg_buf_rd = vma_rd->vm_private_data;
 	sg_buf_wr = vma_wr->vm_private_data;
 
-	if ((sg_buf_rd->dma_dir != DMA_TO_DEVICE) ||
-	    (sg_buf_wr->dma_dir != DMA_FROM_DEVICE))
+	if ((sg_buf_rd->dma_dir != DMA_FROM_DEVICE) ||
+	    (sg_buf_wr->dma_dir != DMA_TO_DEVICE))
 		return -EINVAL;
 
 	dma_addr_rd = mem_base + vma_rd->vm_pgoff * PAGE_SIZE;
