@@ -8,5 +8,6 @@
 obj-$(CONFIG_AVALON_DMA)	+= avalon-dma.o
 
 avalon-dma-objs			:= avalon-hw.o \
+				   avalon_hw_rust.o \
 				   avalon-core.o \
 				   avalon-pci.o
