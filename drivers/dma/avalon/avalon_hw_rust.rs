@@ -4,9 +4,10 @@
 
 //! use kernel::prelude::*;
 use kernel::io::IoRaw;
+use kernel::error::Result;
 
 #[repr(packed)]
-struct DmaControl {
+struct DmaControlRegs {
     rc_src_lo: u32,
     rc_src_hi: u32,
     ep_dst_lo: u32,
@@ -26,7 +27,6 @@ struct DmaControl {
 ///         control: [u8; 4],
 ///     }
 
-///#[repr(packed)]
 ///struct DmaControl {
 ///    rc_src_lo: u32,     /// ::from_le_bytes(self.rc_src_lo),
 ///    rc_src_hi: u32,     /// ::from_le_bytes(self.rc_src_hi),
@@ -37,19 +37,37 @@ struct DmaControl {
 ///    control: u32,       /// ::from_le_bytes(self.control),
 ///}
 
+struct DmaControl {
+    base: usize,
+    regs: IoRaw::<{ core::mem::size_of::<DmaControlRegs>() }>,
+}
+
+impl DmaControl {
+    fn new(ctrl_base: usize, ctrl_off: usize) -> Result<Self> {
+        let base = ctrl_base + ctrl_off;
+        let regs = IoRaw::<{ core::mem::size_of::<DmaControlRegs>() }>::new(base, core::mem::size_of::<DmaControlRegs>())?;
+
+        Ok(Self { base, regs })
+    }
+
+    fn startXfer(self, rc_src_hi: u32, rc_src_lo: u32, ep_dst_hi: u32, ep_dst_lo: u32, last_id: i32) {
+        let regs = IoRaw::<{ core::mem::size_of::<DmaControlRegs>() }>::new(self.base, core::mem::size_of::<DmaControlRegs>());
+
+        regs.write32(rc_src_hi, core::mem::offset_of!(DmaControlRegs, rc_src_hi));
+        regs.write32(rc_src_hi, core::mem::offset_of!(DmaControlRegs, rc_src_hi));
+        regs.write32(rc_src_lo, core::mem::offset_of!(DmaControlRegs, rc_src_lo));
+        regs.write32(ep_dst_hi, core::mem::offset_of!(DmaControlRegs, ep_dst_hi));
+        regs.write32(ep_dst_lo, core::mem::offset_of!(DmaControlRegs, ep_dst_lo));
+        regs.write32(last_id, core::mem::offset_of!(DmaControlRegs, table_size));
+        regs.write32(last_id, core::mem::offset_of!(DmaControlRegs, last_ptr));
+    }
+}
+
 #[allow(missing_docs)]
 #[no_mangle]
-pub extern "C" fn start_xfer(base: usize, ctrl_off: usize,
-    rc_src_hi: u32, _rc_src_lo: u32,
+pub extern "C" fn start_xfer(_base: usize, _ctrl_off: usize,
+    _rc_src_hi: u32, _rc_src_lo: u32,
     _ep_dst_hi: u32, _ep_dst_lo: u32,
-    _last_id: i32) {
-    let iomem = IoRaw::<{ core::mem::size_of::<DmaControl>() }>::new(base + ctrl_off, core::mem::size_of::<DmaControl>());
-
-    iomem.write32(rc_src_hi, core::mem::offset_of!(DmaControl, rc_src_hi));
-/// av_write32(rc_src_hi, base, ctrl_off, rc_src_hi);
-/// av_write32(rc_src_lo, base, ctrl_off, rc_src_lo);
-/// av_write32(ep_dst_hi, base, ctrl_off, ep_dst_hi);
-/// av_write32(ep_dst_lo, base, ctrl_off, ep_dst_lo);
-/// av_write32(last_id, base, ctrl_off, table_size);
-/// av_write32(last_id, base, ctrl_off, last_ptr);
+    _last_id: i32) -> i32 {
+    0
 }
