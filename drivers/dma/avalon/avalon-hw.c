@@ -142,7 +142,7 @@ int setup_descs_sg(struct dma_desc *descs, unsigned int desc_id,
 		/*
 		 * Stop when descriptor table entries are exhausted.
 		 */
-		if (desc_id == DMA_DESC_MAX)
+		if (desc_id >= DMA_DESC_MAX)
 			break;
 
 		/*
