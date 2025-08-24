@@ -5,8 +5,8 @@
 
 #define DMA_DESC_MAX		AVALON_DMA_DESC_NUM
 
-static void setup_desc(struct dma_desc *desc, u32 desc_id,
-		       u64 dest, u64 src, u32 size)
+void setup_desc(struct dma_desc *desc, u32 desc_id,
+		u64 dest, u64 src, u32 size)
 {
 	desc->src_lo = cpu_to_le32(src & 0xfffffffful);
 	desc->src_hi = cpu_to_le32((src >> 32));
