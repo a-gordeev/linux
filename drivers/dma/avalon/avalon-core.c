@@ -50,7 +50,7 @@ static int setup_dma_descs(struct dma_desc *dma_descs,
 	unsigned int seg_set;
 	int ret;
 
-	ret = setup_descs_sg(dma_descs, 0,
+	ret = setup_descs_sg_rust(dma_descs, 0,
 			     desc->direction,
 			     desc->dev_addr,
 			     desc->seg, desc->nr_segs,
