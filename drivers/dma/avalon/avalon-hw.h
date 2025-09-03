@@ -82,6 +82,13 @@ int setup_descs_sg(struct dma_desc *descs, unsigned int desc_id,
 		   unsigned int seg_start, unsigned int sg_off,
 		   unsigned int *seg_stop, unsigned int *seg_set);
 
+int setup_descs_sg_rust(struct dma_desc *descs, unsigned int desc_id,
+		   enum dma_transfer_direction direction,
+		   dma_addr_t dev_addr,
+		   struct dma_segment *seg, unsigned int nr_segs,
+		   unsigned int seg_start, unsigned int sg_off,
+		   unsigned int *seg_stop, unsigned int *seg_set);
+
 void start_xfer(void __iomem *base, size_t ctrl_off,
 		u32 rc_src_hi, u32 rc_src_lo,
 		u32 ep_dst_hi, u32 ep_dst_lo,
