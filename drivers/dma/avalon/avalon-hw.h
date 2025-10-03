@@ -75,7 +75,7 @@ struct dma_segment {
 void setup_desc(struct dma_desc *desc, u32 desc_id,
 		u64 dest, u64 src, u32 size);
 
-int setup_descs_sg_rust(struct dma_desc *descs, unsigned int desc_id,
+int setup_descs_sg(struct dma_desc *descs, unsigned int desc_id,
 		   enum dma_transfer_direction direction,
 		   dma_addr_t dev_addr,
 		   struct dma_segment *seg, unsigned int nr_segs,

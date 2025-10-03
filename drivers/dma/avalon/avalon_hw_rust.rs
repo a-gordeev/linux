@@ -106,7 +106,7 @@ fn setup_descs(
     Ok((nr_descs, set))
 }
 
-fn setup_descs_sg(
+fn __setup_descs_sg(
     descs: &[dma_desc],
     mut desc_id: c_uint,
     direction: dma_transfer_direction,
@@ -231,9 +231,9 @@ fn setup_descs_sg(
     }
 }
 
-/// setup_descs_sg() rust replacement
+/// setup_descs_sg() rust interface
 #[no_mangle]
-pub extern "C" fn setup_descs_sg_rust(
+pub extern "C" fn setup_descs_sg(
     descs: *const dma_desc,
     desc_id: c_uint,
     direction: dma_transfer_direction,
@@ -251,7 +251,7 @@ pub extern "C" fn setup_descs_sg_rust(
     let seg_slice: &[dma_segment] = unsafe {
         core::slice::from_raw_parts(seg, nr_segs as usize * core::mem::size_of::<dma_segment>())
     };
-    let res = setup_descs_sg(
+    let res = __setup_descs_sg(
         descs_slice,
         desc_id,
         direction,
