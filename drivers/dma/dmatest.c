@@ -17,8 +17,10 @@
 #include <linux/sched/task.h>
 #include <linux/module.h>
 #include <linux/moduleparam.h>
+#include <linux/pagemap.h>
 #include <linux/random.h>
 #include <linux/slab.h>
+#include <linux/vmalloc.h>
 #include <linux/wait.h>
 
 static bool nobounce;
@@ -92,6 +94,53 @@ static bool polled;
 module_param(polled, bool, 0644);
 MODULE_PARM_DESC(polled, "Use polling for completion instead of interrupts");
 
+static int transfer_direction = DMA_DEV_TO_MEM;
+module_param(transfer_direction, int, 0644);
+MODULE_PARM_DESC(transfer_direction, "Transfer direction (DMA_DEV_TO_MEM)");
+
+static ulong src_addr;
+module_param(src_addr, ulong, 0644);
+MODULE_PARM_DESC(src_addr, "Physical source address");
+
+static ulong dst_addr;
+module_param(dst_addr, ulong, 0644);
+MODULE_PARM_DESC(dst_addr, "Physical destination address");
+
+static int src_addr_width;
+module_param(src_addr_width, int, 0644);
+MODULE_PARM_DESC(src_addr_width, "Source address width");
+
+static int dst_addr_width;
+module_param(dst_addr_width, int, 0644);
+MODULE_PARM_DESC(dst_addr_width, "Destination address width");
+
+static u32 src_maxburst;
+module_param(src_maxburst, uint, 0644);
+MODULE_PARM_DESC(src_maxburst, "Source maximal burst size");
+
+static u32 dst_maxburst;
+module_param(dst_maxburst, uint, 0644);
+MODULE_PARM_DESC(dst_maxburst, "Destination maximal burst size");
+
+static u32 src_port_window_size;
+module_param(src_port_window_size, uint, 0644);
+MODULE_PARM_DESC(src_port_window_size, "Source port window size");
+
+static u32 dst_port_window_size;
+module_param(dst_port_window_size, uint, 0644);
+MODULE_PARM_DESC(dst_port_window_size, "Destination port window size");
+
+static bool device_fc;
+module_param(device_fc, bool, 0644);
+MODULE_PARM_DESC(device_fc, "Flow Controller Settings");
+
+static void *peripheral_config = NULL;
+static size_t peripheral_size = 0;
+
+static char filename[255];
+module_param_string(filename, filename, sizeof(filename), 0644);
+MODULE_PARM_DESC(filename, "Transfer contents file");
+
 /**
  * struct dmatest_params - test parameters.
  * @nobounce:		prevent using swiotlb buffer
@@ -150,6 +199,15 @@ static struct dmatest_info {
 } test_info = {
 	.channels = LIST_HEAD_INIT(test_info.channels),
 	.lock = __MUTEX_INITIALIZER(test_info.lock),
+};
+
+struct dmatest_slave_config {
+	struct dma_slave_config	cfg;
+	struct sg_table		sgt;
+	struct page		**pages;
+	unsigned int		nr_pages;
+	struct file		*filp;
+	ssize_t			size;
 };
 
 static int dmatest_run_set(const char *val, const struct kernel_param *kp);
@@ -557,6 +615,184 @@ err:
 	return -ENOMEM;
 }
 
+static int prep_slave_config_wr(struct dmatest_slave_config *sc)
+{
+	struct address_space *mapping;
+	int ret;
+	int i;
+
+	sc->filp = filp_open(filename, O_RDONLY, 0);
+	if (IS_ERR(sc->filp))
+		return PTR_ERR(sc->filp);
+	mapping = sc->filp->f_mapping;
+
+	sc->size = i_size_read(file_inode(sc->filp));
+	sc->nr_pages = DIV_ROUND_UP(sc->size, PAGE_SIZE);
+
+	sc->pages = kcalloc(sc->nr_pages, sizeof(sc->pages[0]), GFP_KERNEL | GFP_DMA);
+	if (!sc->pages) {
+		ret = -ENOMEM;
+		goto err_close_file;
+	}
+
+	for (i = 0; i < sc->nr_pages; i++) {
+		sc->pages[i] = read_mapping_page(mapping, i, sc->filp);
+		if (IS_ERR(sc->pages[i])) {
+			ret = PTR_ERR(sc->pages[i]);
+			goto err_free_pages_arr;
+		}
+		lock_page(sc->pages[i]);
+	}
+
+	ret = sg_alloc_table_from_pages(&sc->sgt, sc->pages, sc->nr_pages,
+					0, sc->size, GFP_KERNEL);
+	if (ret)
+		goto err_unlock_pages;
+
+	return 0;
+
+err_unlock_pages:
+	while (i--) {
+		unlock_page(sc->pages[i]);
+		put_page(sc->pages[i]);
+	}
+err_free_pages_arr:
+	kfree(sc->pages);
+err_close_file:
+	filp_close(sc->filp, NULL);
+
+	return ret;
+}
+
+static void unprep_slave_config_wr(struct dmatest_slave_config *sc)
+{
+	int i;
+
+	sg_free_table(&sc->sgt);
+	for (i = 0; i < sc->nr_pages; i++) {
+		unlock_page(sc->pages[i]);
+		put_page(sc->pages[i]);
+	}
+	kfree(sc->pages);
+	filp_close(sc->filp, NULL);
+}
+
+static int prep_slave_config_rd(struct dmatest_slave_config *sc)
+{
+	unsigned int nr_pages;
+	int ret;
+	int i;
+
+	sc->filp = filp_open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+	if (IS_ERR(sc->filp))
+		return PTR_ERR(sc->filp);
+
+	sc->size = transfer_size;
+	sc->nr_pages = DIV_ROUND_UP(sc->size, PAGE_SIZE);
+
+	sc->pages = kcalloc(sc->nr_pages, sizeof(sc->pages[0]), GFP_KERNEL);
+	if (!sc->pages) {
+		ret = -ENOMEM;
+		goto err_close_file;
+	}
+
+	nr_pages = alloc_pages_bulk(GFP_KERNEL, sc->nr_pages, sc->pages);
+	if (nr_pages != sc->nr_pages) {
+		ret = -ENOMEM;
+		goto err_free_pages_arr;
+	}
+
+	ret = sg_alloc_table_from_pages(&sc->sgt, sc->pages, sc->nr_pages,
+					0, sc->size, GFP_KERNEL);
+	if (ret)
+		goto err_free_pages;
+
+	return 0;
+
+err_free_pages:
+	for (i = 0; i < nr_pages; i++)
+		free_page(i);
+err_free_pages_arr:
+	kfree(sc->pages);
+err_close_file:
+	filp_close(sc->filp, NULL);
+
+	return ret;
+}
+
+static void unprep_slave_config_rd(struct dmatest_slave_config *sc)
+{
+	int ret = -ENOMEM;
+	void *buf;
+	int i;
+
+	buf = vm_map_ram(sc->pages, sc->nr_pages, NUMA_NO_NODE);
+	if (buf) {
+		loff_t off = 0;
+
+		ret = kernel_write(sc->filp, buf, sc->size, &off);
+		vm_unmap_ram(buf, sc->nr_pages);
+	}
+
+	sg_free_table(&sc->sgt);
+	for (i = 0; i < sc->nr_pages; i++)
+		__free_pages(sc->pages[i], 0);
+	kfree(sc->pages);
+
+	if (ret < 0) {
+		struct mnt_idmap *idmap = mnt_idmap(sc->filp->f_path.mnt);
+		struct dentry *dentry = sc->filp->f_path.dentry;
+		struct inode *dir = d_inode(dentry->d_parent);
+
+		vfs_unlink(idmap, dir, dentry, NULL);
+	}
+
+	filp_close(sc->filp, NULL);
+}
+
+static struct dmatest_slave_config *prep_slave_config(void)
+{
+	struct dmatest_slave_config *sc;
+	int ret;
+
+	sc = kzalloc(sizeof(*sc), GFP_KERNEL);
+	if (!sc)
+		return ERR_PTR(-ENOMEM);
+
+	if (transfer_direction == DMA_DEV_TO_MEM)
+		ret = prep_slave_config_rd(sc);
+	else
+		ret = prep_slave_config_wr(sc);
+	if (ret) {
+		kfree(sc);
+		return ERR_PTR(ret);
+	}
+
+	sc->cfg.direction = transfer_direction;
+	sc->cfg.src_addr = src_addr;
+	sc->cfg.dst_addr = dst_addr;
+	sc->cfg.src_addr_width = src_addr_width;
+	sc->cfg.dst_addr_width = dst_addr_width;
+	sc->cfg.src_maxburst = src_maxburst;
+	sc->cfg.dst_maxburst = dst_maxburst;
+	sc->cfg.src_port_window_size = src_port_window_size;
+	sc->cfg.dst_port_window_size = dst_port_window_size;
+	sc->cfg.device_fc = device_fc;
+	sc->cfg.peripheral_config = peripheral_config;
+	sc->cfg.peripheral_size = peripheral_size;
+
+	return sc;
+}
+
+static void unprep_slave_config(struct dmatest_slave_config *sc)
+{
+	if (sc->cfg.direction == DMA_DEV_TO_MEM)
+		unprep_slave_config_rd(sc);
+	else
+		unprep_slave_config_wr(sc);
+	kfree(sc);
+}
+
 /*
  * This function repeatedly tests DMA transfers of various lengths and
  * offsets for a given operation type until it is told to exit by
@@ -602,6 +838,7 @@ static int dmatest_func(void *data)
 	bool			is_memset = false;
 	dma_addr_t		*srcs;
 	dma_addr_t		*dma_pq;
+	struct dmatest_slave_config	*sc;
 
 	set_freezable();
 
@@ -645,6 +882,7 @@ static int dmatest_func(void *data)
 
 		for (i = 0; i < src->cnt; i++)
 			pq_coefs[i] = 1;
+	} else if (thread->type == DMA_SLAVE) {
 	} else
 		goto err_thread_type;
 
@@ -684,6 +922,12 @@ static int dmatest_func(void *data)
 	dma_pq = kcalloc(dst->cnt, sizeof(dma_addr_t), GFP_KERNEL);
 	if (!dma_pq)
 		goto err_srcs_array;
+
+	sc = prep_slave_config();
+	if (IS_ERR(sc)) {
+		ret = PTR_ERR(sc);
+		goto err_dma_pq;
+	}
 
 	/*
 	 * src and dst buffers are freed by ourselves below
@@ -810,6 +1054,11 @@ static int dmatest_func(void *data)
 			tx = dev->device_prep_dma_pq(chan, dma_pq, srcs,
 						     src->cnt, pq_coefs,
 						     len, flags);
+		} else if (thread->type == DMA_SLAVE) {
+			if (dev->device_config(chan, &sc->cfg))
+				goto error_unmap_continue;
+			tx = dev->device_prep_slave_sg(chan, sc->sgt.sgl, sc->sgt.nents,
+						       sc->cfg.direction, flags, NULL);
 		}
 
 		if (!tx) {
@@ -919,6 +1168,9 @@ error_unmap_continue:
 	runtime = ktime_to_us(ktime);
 
 	ret = 0;
+
+	unprep_slave_config(sc);
+err_dma_pq:
 	kfree(dma_pq);
 err_srcs_array:
 	kfree(srcs);
@@ -983,6 +1235,8 @@ static int dmatest_add_threads(struct dmatest_info *info,
 		op = "xor";
 	else if (type == DMA_PQ)
 		op = "pq";
+	else if (type == DMA_SLAVE)
+		op = "slave";
 	else
 		return -EINVAL;
 
@@ -1062,6 +1316,10 @@ static int dmatest_add_channel(struct dmatest_info *info,
 		cnt = dmatest_add_threads(info, dtc, DMA_PQ);
 		thread_count += cnt > 0 ? cnt : 0;
 	}
+	if (dma_has_cap(DMA_SLAVE, dma_dev->cap_mask)) {
+		cnt = dmatest_add_threads(info, dtc, DMA_SLAVE);
+		thread_count += cnt > 0 ? cnt : 0;
+	}
 
 	pr_info("Added %u threads using %s\n",
 		thread_count, dma_chan_name(chan));
@@ -1127,6 +1385,7 @@ static void add_threaded_test(struct dmatest_info *info)
 	request_channels(info, DMA_MEMSET);
 	request_channels(info, DMA_XOR);
 	request_channels(info, DMA_PQ);
+	request_channels(info, DMA_SLAVE);
 }
 
 static void run_pending_tests(struct dmatest_info *info)
