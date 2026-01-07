@@ -1,8 +1,8 @@
 DefinitionBlock ("", "SSDT", 2, "LINUX", "PROPS", 0x00000001)
 {
-    External (\_SB_.PCI0.S28, DeviceObj)
+    External (\_SB_.PCI0.S18, DeviceObj)
 
-    Scope (\_SB.PCI0.S28)
+    Scope (\_SB.PCI0.S18)
     {
         Method (_DSD, 0, NotSerialized)
         {
