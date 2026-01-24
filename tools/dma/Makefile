@@ -18,7 +18,7 @@ MAKEFLAGS += -r
 
 override CFLAGS += -O2 -Wall -g -D_GNU_SOURCE -I$(OUTPUT)include
 
-ALL_TARGETS := dma_map_benchmark
+ALL_TARGETS := dma_map_benchmark dma-slave
 ALL_PROGRAMS := $(patsubst %,$(OUTPUT)%,$(ALL_TARGETS))
 
 all: $(ALL_PROGRAMS)
@@ -40,6 +40,10 @@ FORCE:
 DMA_MAP_BENCHMARK = dma_map_benchmark
 $(DMA_MAP_BENCHMARK): prepare FORCE
 	$(CC) $(CFLAGS) $(DMA_MAP_BENCHMARK).c -o $(DMA_MAP_BENCHMARK)
+
+DMA_SLAVE = dma-slave
+$(DMA_SLAVE): FORCE
+	$(CC) $(CFLAGS) -I../../include/uapi -D__EXPORTED_HEADERS__ $(DMA_SLAVE).c -o $(DMA_SLAVE)
 
 clean:
 	rm -f $(ALL_PROGRAMS)
