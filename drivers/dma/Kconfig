@@ -789,6 +789,13 @@ config DMATEST
 	  Simple DMA test client. Say N unless you're debugging a
 	  DMA Device driver.
 
+config DMA_SLAVE
+	tristate "DMA Slave Test client"
+	depends on DMA_ENGINE
+	help
+	  Simple DMA Passthrough Slave test client. Say N unless you're
+	  debugging a DMA Device driver.
+
 config DMA_ENGINE_RAID
 	bool
 
