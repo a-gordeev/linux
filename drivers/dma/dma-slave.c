@@ -91,72 +91,55 @@ static void dma_slave_teardown_config(struct dma_slave_config *cfg)
 	kfree(cfg->peripheral_config);
 }
 
+static void dma_slave_adjust_config(unsigned long nr_pages,
+				    struct dma_slave_config *cfg,
+				    struct dma_slave_config_uapi *ucfg)
+{
+	ucfg->data.iov_base += nr_pages * PAGE_SIZE;
+	ucfg->data.iov_len -= nr_pages * PAGE_SIZE;
+
+	cfg->src_addr += nr_pages * PAGE_SIZE;
+	cfg->dst_addr += nr_pages * PAGE_SIZE;
+}
+
 static void dma_slave_callback(void *callback_param)
 {
 	complete((struct completion *)callback_param);
 }
 
-static long dma_slave_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+static int dma_slave_xfer(struct dma_chan *chan, enum dma_data_direction dir,
+			  struct dma_slave_config_uapi *ucfg, struct dma_slave_config *cfg,
+			  int nr_pages)
 {
 	struct dma_async_tx_descriptor *desc;
-	struct dma_slave_config_uapi ucfg;
-	struct dma_slave_config cfg = {};
-	enum dma_data_direction dir;
+	struct completion completion;
 	struct page **pages;
-	unsigned long nr_pages;
-	struct dma_chan *chan;
 	struct sg_table sgt;
 	unsigned int foll;
 	dma_cookie_t tx;
-	struct completion completion;
 	long ret;
 	int i;
 
-	switch (cmd) {
-	case IOCTL_DMA_SLAVE_READ:
-	case IOCTL_DMA_SLAVE_WRITE:
-		if (copy_from_user(&ucfg, (void __user *)arg, sizeof(ucfg)))
-			return -EFAULT;
-
-		ret = dma_slave_setup_config(cmd, &cfg, &ucfg, &dir);
-		if (ret)
-			return ret;
-		break;
-	default:
-		return -EINVAL;
-	};
-
-	chan = dma_slave_request_chan(ucfg.channel_name);
-	if (IS_ERR(chan)) {
-		ret = PTR_ERR(chan);
-		goto err_teardown_config;
-	}
-
-	ret = dmaengine_slave_config(chan, &cfg);
-	if (ret)
-		goto err_release_chan;
-
-	nr_pages = DIV_ROUND_UP(ucfg.data.iov_len, PAGE_SIZE);
 	pages = kmalloc_array(nr_pages, sizeof(pages[0]), GFP_KERNEL);
-	if (!pages) {
-		ret = -ENOMEM;
-		goto err_release_chan;
-	}
+	if (!pages)
+		return -ENOMEM;
+
+	ret = dmaengine_slave_config(chan, cfg);
+	if (ret)
+		goto err_free_pages;
 
 	foll = 0;
-	if (cmd == IOCTL_DMA_SLAVE_READ)
+	if (dir == DMA_FROM_DEVICE)
 		foll |= FOLL_WRITE;
+
 	mmap_read_lock(current->mm);
-	ret = pin_user_pages((unsigned long)ucfg.data.iov_base, nr_pages, foll, pages);
+
+	ret = pin_user_pages((unsigned long)ucfg->data.iov_base, nr_pages, foll, pages);
 	if (ret < 0)
 		goto err_mmap_unlock;
-	if (ret != nr_pages) {
-		nr_pages = ret;
-		ret = -EFAULT;
-		goto err_unpin_pages;
-	}
+	nr_pages = ret;
 
-	ret = sg_alloc_table_from_pages(&sgt, pages, nr_pages, 0, ucfg.data.iov_len, GFP_KERNEL);
+	ret = sg_alloc_table_from_pages(&sgt, pages, nr_pages, 0, ucfg->data.iov_len, GFP_KERNEL);
 	if (ret)
 		goto err_unpin_pages;
 
@@ -164,7 +147,7 @@ static long dma_slave_ioctl(struct file *file, unsigned int cmd, unsigned long a
 	if (ret)
 		goto err_free_sgt;
 
-	desc = dmaengine_prep_slave_sg(chan, sgt.sgl, sgt.nents, cfg.direction,
+	desc = dmaengine_prep_slave_sg(chan, sgt.sgl, sgt.nents, cfg->direction,
 				       DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
 	if (!desc) {
 		ret = -ENOMEM;
@@ -190,11 +173,12 @@ static long dma_slave_ioctl(struct file *file, unsigned int cmd, unsigned long a
 		goto err_term_sync;
 	}
 
-	if (cmd == IOCTL_DMA_SLAVE_READ) {
+	if (dir == DMA_FROM_DEVICE) {
 		for (i = 0; i < nr_pages; i++)
 			set_page_dirty_lock(pages[i]);
 	}
 
+	ret = nr_pages;
 	goto err_unmap_sgt;
 
 err_term_sync:
@@ -207,8 +191,51 @@ err_unpin_pages:
 	unpin_user_pages(pages, nr_pages);
 err_mmap_unlock:
 	mmap_read_unlock(current->mm);
+err_free_pages:
 	kfree(pages);
-err_release_chan:
+
+	return ret;
+}
+
+static long dma_slave_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+	struct dma_slave_config_uapi ucfg;
+	struct dma_slave_config cfg = {};
+	enum dma_data_direction dir;
+	unsigned long nr_pages;
+	struct dma_chan *chan;
+	int ret;
+
+	switch (cmd) {
+	case IOCTL_DMA_SLAVE_READ:
+	case IOCTL_DMA_SLAVE_WRITE:
+		if (copy_from_user(&ucfg, (void __user *)arg, sizeof(ucfg)))
+			return -EFAULT;
+		ret = dma_slave_setup_config(cmd, &cfg, &ucfg, &dir);
+		if (ret)
+			return ret;
+		break;
+	default:
+		return -EINVAL;
+	};
+
+	chan = dma_slave_request_chan(ucfg.channel_name);
+	if (IS_ERR(chan)) {
+		ret = PTR_ERR(chan);
+		goto err_teardown_config;
+	}
+
+	nr_pages = DIV_ROUND_UP(ucfg.data.iov_len, PAGE_SIZE);
+	while (nr_pages) {
+		int __nr_pages = min(nr_pages, INT_MAX);
+
+		ret = dma_slave_xfer(chan, dir, &ucfg, &cfg, __nr_pages);
+		if (ret < 0)
+			break;
+		dma_slave_adjust_config(ret, &cfg, &ucfg);
+		nr_pages -= ret;
+	}
+
 	dma_slave_release_chan(chan);
 err_teardown_config:
 	dma_slave_teardown_config(&cfg);
