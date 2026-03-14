@@ -81,6 +81,7 @@ fn setup_descs(
     while len > 0 {
         let xfer_len: usize = cmp::min(len, AVALON_DMA_MAX_TANSFER_SIZE as usize);
 
+        // SAFETY:
         unsafe {
             setup_desc(&descs[nr_descs], desc_id, dest, src, xfer_len as c_uint);
         }
@@ -106,6 +107,7 @@ fn setup_descs(
     Ok((nr_descs, set))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn __setup_descs_sg(
     descs: &[dma_desc],
     mut desc_id: c_uint,
@@ -136,7 +138,7 @@ fn __setup_descs_sg(
      * Skip all SGEs that have been fully transmitted.
      */
     while i < seg_start {
-        dev_addr += seg[i].dma_len as dma_addr_t;
+        dev_addr += dma_addr_t::from(seg[i].dma_len);
         i += 1;
     }
 
@@ -199,7 +201,7 @@ fn __setup_descs_sg(
          * The descriptor table still has free entries, thus
          * the current SGE should have fit.
          */
-        if dma_len as usize != dma_len_set {
+        if dma_len != dma_len_set {
             return Err(code::EINVAL);
         }
 
@@ -218,22 +220,24 @@ fn __setup_descs_sg(
      */
     if nr_descs != 0 {
         Ok(setup_descs_result {
-            nr_descs: nr_descs,
+            nr_descs,
             seg_stop: i,
-            seg_set: dma_len_set as usize,
+            seg_set: dma_len_set,
         })
     } else {
         Ok(setup_descs_result {
-            nr_descs: nr_descs,
+            nr_descs,
             seg_stop: seg_start,
             seg_set: seg_off,
         })
     }
 }
 
-/// setup_descs_sg() rust interface
+/// # Safety
+///
+/// setup_descs_sg() is called from C code
 #[no_mangle]
-pub extern "C" fn setup_descs_sg(
+pub unsafe extern "C" fn setup_descs_sg(
     descs: *const dma_desc,
     desc_id: c_uint,
     direction: dma_transfer_direction,
@@ -245,11 +249,13 @@ pub extern "C" fn setup_descs_sg(
     seg_stop: *mut c_uint,
     seg_set: *mut c_uint,
 ) -> c_int {
+    // SAFETY:
     let descs_slice: &[dma_desc] = unsafe {
-        core::slice::from_raw_parts(descs, AVALON_DMA_DESC_NUM as usize * core::mem::size_of::<dma_desc>())
+        core::slice::from_raw_parts(descs, AVALON_DMA_DESC_NUM as usize)
     };
+    // SAFETY:
     let seg_slice: &[dma_segment] = unsafe {
-        core::slice::from_raw_parts(seg, nr_segs as usize * core::mem::size_of::<dma_segment>())
+        core::slice::from_raw_parts(seg, nr_segs as usize)
     };
     let res = __setup_descs_sg(
         descs_slice,
@@ -267,6 +273,7 @@ pub extern "C" fn setup_descs_sg(
             return e.to_errno();
         },
         Ok(s) => {
+            // SAFETY:
             unsafe {
                 *seg_stop = s.seg_stop as c_uint;
                 *seg_set = s.seg_set as c_uint;
