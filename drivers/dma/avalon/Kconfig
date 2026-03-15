@@ -10,13 +10,13 @@ config AVALON_DMA
 config AVALON_DMA_PCI_VENDOR_ID
 	hex "PCI Vendor ID"
 	range 0 0xFFFF
-	default 0xE003
+	default 0x1172
 	depends on AVALON_DMA
 
 config AVALON_DMA_PCI_DEVICE_ID
 	hex "PCI Device ID"
 	range 0 0xFFFF
-	default 0x1172
+	default 0xE003
 	depends on AVALON_DMA
 
 config AVALON_DMA_FW_PARAMS
