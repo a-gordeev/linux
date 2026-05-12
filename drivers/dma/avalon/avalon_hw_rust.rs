@@ -42,7 +42,7 @@ pub struct dma_segment {
 
 extern "C" {
     fn setup_desc(
-        desc: *const dma_desc,
+        desc: *mut dma_desc,
         desc_id: __u32,
         dest: __u64,
         src: __u64,
@@ -57,7 +57,7 @@ struct setup_descs_result {
 }
 
 fn setup_descs(
-    descs: &[dma_desc],
+    descs: &mut[dma_desc],
     mut desc_id: c_uint,
     direction: dma_transfer_direction,
     dev_addr: dma_addr_t,
@@ -83,7 +83,7 @@ fn setup_descs(
 
         // SAFETY:
         unsafe {
-            setup_desc(&descs[nr_descs], desc_id, dest, src, xfer_len as c_uint);
+            setup_desc(&mut descs[nr_descs], desc_id, dest, src, xfer_len as c_uint);
         }
 
         set += xfer_len;
@@ -109,7 +109,7 @@ fn setup_descs(
 
 #[allow(clippy::too_many_arguments)]
 fn __setup_descs_sg(
-    descs: &[dma_desc],
+    descs: &mut[dma_desc],
     mut desc_id: c_uint,
     direction: dma_transfer_direction,
     mut dev_addr: dma_addr_t,
@@ -174,7 +174,7 @@ fn __setup_descs_sg(
         }
 
         let res = setup_descs(
-            &descs[cur_desc..],
+            &mut descs[cur_desc..],
             desc_id,
             direction,
             dev_addr,
@@ -238,7 +238,7 @@ fn __setup_descs_sg(
 /// setup_descs_sg() is called from C code
 #[no_mangle]
 pub unsafe extern "C" fn setup_descs_sg(
-    descs: *const dma_desc,
+    descs: *mut dma_desc,
     desc_id: c_uint,
     direction: dma_transfer_direction,
     dev_addr: dma_addr_t,
@@ -250,8 +250,8 @@ pub unsafe extern "C" fn setup_descs_sg(
     seg_set: *mut c_uint,
 ) -> c_int {
     // SAFETY:
-    let descs_slice: &[dma_desc] = unsafe {
-        core::slice::from_raw_parts(descs, AVALON_DMA_DESC_NUM as usize)
+    let descs_slice: &mut[dma_desc] = unsafe {
+        core::slice::from_raw_parts_mut(descs, AVALON_DMA_DESC_NUM as usize)
     };
     // SAFETY:
     let seg_slice: &[dma_segment] = unsafe {
