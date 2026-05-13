@@ -60,9 +60,7 @@ fn setup_desc(
         (*desc).dst_lo = (dest as u32).to_le();
         (*desc).dst_hi = ((dest >> 32) as u32).to_le();
         (*desc).ctl_dma_len = ((size >> 2) as u32).to_le() | (desc_id << 18);
-        (*desc).reserved[0] = 0u32.to_le();
-        (*desc).reserved[1] = 0u32.to_le();
-        (*desc).reserved[2] = 0u32.to_le();
+        (*desc).reserved = [0; 3];
     }
 }
 
