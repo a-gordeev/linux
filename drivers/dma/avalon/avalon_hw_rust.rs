@@ -40,20 +40,30 @@ pub struct dma_segment {
     dma_len: c_uint,
 }
 
-extern "C" {
-    fn setup_desc(
-        desc: *mut dma_desc,
-        desc_id: __u32,
-        dest: __u64,
-        src: __u64,
-        size: __u32
-    );
-}
-
 struct setup_descs_result {
     nr_descs: usize,
     seg_stop: usize,
     seg_set: usize,
+}
+
+fn setup_desc(
+    desc: *mut dma_desc,
+    desc_id: c_uint,
+    dest: dma_addr_t,
+    src: dma_addr_t,
+    size: usize)
+{
+    // SAFETY:
+    unsafe {
+        (*desc).src_lo = (src as u32).to_le();
+        (*desc).src_hi = ((src >> 32) as u32).to_le();
+        (*desc).dst_lo = (dest as u32).to_le();
+        (*desc).dst_hi = ((dest >> 32) as u32).to_le();
+        (*desc).ctl_dma_len = ((size >> 2) as u32).to_le() | (desc_id << 18);
+        (*desc).reserved[0] = 0u32.to_le();
+        (*desc).reserved[1] = 0u32.to_le();
+        (*desc).reserved[2] = 0u32.to_le();
+    }
 }
 
 fn setup_descs(
@@ -81,10 +91,7 @@ fn setup_descs(
     while len > 0 {
         let xfer_len: usize = cmp::min(len, AVALON_DMA_MAX_TANSFER_SIZE as usize);
 
-        // SAFETY:
-        unsafe {
-            setup_desc(&mut descs[nr_descs], desc_id, dest, src, xfer_len as c_uint);
-        }
+        setup_desc(&mut descs[nr_descs], desc_id, dest, src, xfer_len);
 
         set += xfer_len;
 

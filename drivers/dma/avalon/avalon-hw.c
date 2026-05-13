@@ -5,19 +5,6 @@
 
 #define DMA_DESC_MAX		AVALON_DMA_DESC_NUM
 
-void setup_desc(struct dma_desc *desc, u32 desc_id,
-		u64 dest, u64 src, u32 size)
-{
-	desc->src_lo = cpu_to_le32(src & 0xfffffffful);
-	desc->src_hi = cpu_to_le32((src >> 32));
-	desc->dst_lo = cpu_to_le32(dest & 0xfffffffful);
-	desc->dst_hi = cpu_to_le32((dest >> 32));
-	desc->ctl_dma_len = cpu_to_le32((size >> 2) | (desc_id << 18));
-	desc->reserved[0] = cpu_to_le32(0x0);
-	desc->reserved[1] = cpu_to_le32(0x0);
-	desc->reserved[2] = cpu_to_le32(0x0);
-}
-
 void start_xfer(void __iomem *base, size_t ctrl_off,
 		u32 rc_src_hi, u32 rc_src_lo,
 		u32 ep_dst_hi, u32 ep_dst_lo,

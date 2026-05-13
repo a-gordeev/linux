@@ -72,9 +72,6 @@ struct dma_segment {
 	unsigned int	dma_len;
 };
 
-void setup_desc(struct dma_desc *desc, u32 desc_id,
-		u64 dest, u64 src, u32 size);
-
 int setup_descs_sg(struct dma_desc *descs, unsigned int desc_id,
 		   enum dma_transfer_direction direction,
 		   dma_addr_t dev_addr,
